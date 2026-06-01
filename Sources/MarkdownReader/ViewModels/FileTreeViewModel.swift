@@ -34,7 +34,7 @@ final class FileTreeViewModel {
 
     // MARK: - 初始化
 
-    init(fileService: FileService = FileService(), settings: SettingsModel = SettingsModel()) {
+    init(fileService: FileService = FileService(), settings: SettingsModel = SettingsModel.shared) {
         self.fileService = fileService
         self.settings = settings
     }

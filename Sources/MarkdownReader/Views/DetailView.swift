@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// 右侧主体区容器（圆角），包含 TitleBar 和内容区
+/// 右侧主体区容器（圆角），包含 TitleBar、内容区和底部项目状态栏
 struct DetailView: View {
     let appViewModel: AppViewModel
     let documentViewModel: DocumentViewModel
     let fileTreeViewModel: FileTreeViewModel
+    let gitViewModel: GitViewModel
     let settings: SettingsModel
+    @Environment(\.language) private var language
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,6 +21,14 @@ struct DetailView: View {
 
             // 内容区域
             contentArea
+
+            // 底部项目状态栏（仅 Git 仓库时显示）
+            if gitViewModel.isGitRepository {
+                ProjectStatusView(
+                    gitViewModel: gitViewModel,
+                    appViewModel: appViewModel
+                )
+            }
         }
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(
@@ -45,7 +55,7 @@ struct DetailView: View {
                 message: error.localizedDescription
             )
         } else if documentViewModel.isLoading {
-            ProgressView("加载中...")
+            ProgressView(L10n.tr(.loading, language: language))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if documentViewModel.hasDocument {
             // 文档内容
@@ -54,7 +64,7 @@ struct DetailView: View {
             // 空目录状态
             ErrorView(
                 icon: "folder",
-                message: "该目录下无 Markdown 文件"
+                message: L10n.tr(.emptyDirectoryMessage, language: language)
             )
         } else {
             // 选中目录但未选中文件

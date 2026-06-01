@@ -4,6 +4,7 @@ import SwiftUI
 struct SidebarView: View {
     let fileTreeViewModel: FileTreeViewModel
     let appViewModel: AppViewModel
+    @Environment(\.language) private var language
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,7 +19,7 @@ struct SidebarView: View {
 
             // 目录树列表
             if fileTreeViewModel.isLoading {
-                ProgressView("加载中...")
+                ProgressView(L10n.tr(.loading, language: language))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = fileTreeViewModel.errorMessage {
                 ErrorView(message: error)
@@ -94,7 +95,7 @@ struct SidebarView: View {
             Image(systemName: "folder")
                 .font(.system(size: 32))
                 .foregroundStyle(.secondary)
-            Text("该目录下无 Markdown 文件")
+            Text(L10n.tr(.emptyDirectoryMessage, language: language))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -111,7 +112,7 @@ struct SidebarView: View {
                 Image(systemName: "gearshape")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
-                Text("Settings")
+                Text(L10n.tr(.settingsTabGeneral, language: language))
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -121,7 +122,7 @@ struct SidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("设置 (⌘,)")
+        .help(L10n.tr(.sidebarSettings, language: language))
     }
 
     // MARK: - 辅助方法

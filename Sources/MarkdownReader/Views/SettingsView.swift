@@ -3,20 +3,25 @@ import SwiftUI
 /// 设置窗口主视图，包含「通用」和「外观」两个标签页
 /// 参照 buddy-macos SettingsContent 的 Tab 式布局
 struct SettingsView: View {
-    @State private var settings = SettingsModel()
+    @State private var settings = SettingsModel.shared
     @State private var selectedTab: SettingsTab = .general
+
+    /// 当前解析后的语言，用于本地化
+    private var currentLanguage: Language {
+        settings.languagePref.resolvedLanguage
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            GeneralSettingsView(settings: settings)
+            GeneralSettingsView(settings: settings, language: currentLanguage)
                 .tabItem {
-                    Label("通用", systemImage: "gearshape")
+                    Label(L10n.tr(.settingsTabGeneral, language: currentLanguage), systemImage: "gearshape")
                 }
                 .tag(SettingsTab.general)
 
-            AppearanceSettingsView(settings: settings)
+            AppearanceSettingsView(settings: settings, language: currentLanguage)
                 .tabItem {
-                    Label("外观", systemImage: "paintbrush")
+                    Label(L10n.tr(.settingsTabAppearance, language: currentLanguage), systemImage: "paintbrush")
                 }
                 .tag(SettingsTab.appearance)
         }
@@ -36,38 +41,70 @@ private enum SettingsTab {
 
 private struct GeneralSettingsView: View {
     @Bindable var settings: SettingsModel
+    let language: Language
+
+    /// 检测到的系统语言名称，用于 auto 选项的副标题
+    /// 通过 L10n 渲染，避免英文界面下显示中文
+    private var detectedLanguageName: String {
+        LanguageService.detectLanguage().localizedName(language)
+    }
 
     var body: some View {
         Form {
+            // 界面语言
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    Picker(L10n.tr(.settingsGeneralLanguageTitle, language: language), selection: $settings.languagePref) {
+                        ForEach(LanguagePref.allCases) { pref in
+                            if pref == .auto {
+                                Text("\(L10n.tr(.languageAuto, language: language)) (\(detectedLanguageName))")
+                                    .tag(pref)
+                            } else {
+                                Text(L10n.tr(LanguagePref.languageKey(for: pref), language: language))
+                                    .tag(pref)
+                            }
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Text(L10n.tr(.settingsGeneralLanguageDesc, language: language))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text(L10n.tr(.settingsGeneralLanguageTitle, language: language))
+            }
+
+            Divider()
+
             // 默认显示模式
             Section {
-                Picker("默认显示模式", selection: $settings.defaultDisplayMode) {
-                    ForEach(DisplayMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
+                Picker(L10n.tr(.settingsGeneralDisplayMode, language: language), selection: $settings.defaultDisplayMode) {
+                    Text(L10n.tr(.displayModeRendered, language: language)).tag(DisplayMode.rendered)
+                    Text(L10n.tr(.displayModeSource, language: language)).tag(DisplayMode.source)
                 }
                 .pickerStyle(.segmented)
             } header: {
-                Text("显示")
+                Text(L10n.tr(.settingsGeneralDisplayTitle, language: language))
             }
 
             Divider()
 
             // 启动行为
             Section {
-                Toggle("启动时重新打开上次位置", isOn: $settings.reopenLastLocation)
+                Toggle(L10n.tr(.settingsGeneralReopenLastLocation, language: language), isOn: $settings.reopenLastLocation)
             } header: {
-                Text("启动")
+                Text(L10n.tr(.settingsGeneralStartupTitle, language: language))
             }
 
             Divider()
 
             // 文件树过滤
             Section {
-                Toggle("显示隐藏文件", isOn: $settings.showHiddenFiles)
-                Toggle("显示非 Markdown 文件", isOn: $settings.showNonMarkdownFiles)
+                Toggle(L10n.tr(.settingsGeneralShowHiddenFiles, language: language), isOn: $settings.showHiddenFiles)
+                Toggle(L10n.tr(.settingsGeneralShowNonMarkdownFiles, language: language), isOn: $settings.showNonMarkdownFiles)
             } header: {
-                Text("文件树")
+                Text(L10n.tr(.settingsGeneralFileTreeTitle, language: language))
             }
         }
         .formStyle(.grouped)
@@ -79,22 +116,23 @@ private struct GeneralSettingsView: View {
 
 private struct AppearanceSettingsView: View {
     @Bindable var settings: SettingsModel
+    let language: Language
 
     var body: some View {
         Form {
             // 外观模式
             Section {
-                Picker("外观模式", selection: $settings.appearanceMode) {
-                    ForEach(AppearanceMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
+                Picker(L10n.tr(.settingsAppearanceMode, language: language), selection: $settings.appearanceMode) {
+                    Text(L10n.tr(.settingsAppearanceModeLight, language: language)).tag(AppearanceMode.light)
+                    Text(L10n.tr(.settingsAppearanceModeDark, language: language)).tag(AppearanceMode.dark)
+                    Text(L10n.tr(.settingsAppearanceModeSystem, language: language)).tag(AppearanceMode.system)
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: settings.appearanceMode) { _, newValue in
                     applyAppearance(newValue)
                 }
             } header: {
-                Text("主题")
+                Text(L10n.tr(.settingsAppearanceThemeTitle, language: language))
             }
 
             Divider()
@@ -102,7 +140,7 @@ private struct AppearanceSettingsView: View {
             // 字体与排版
             Section {
                 HStack {
-                    Text("源码字号")
+                    Text(L10n.tr(.settingsAppearanceSourceFontSize, language: language))
                     Spacer()
                     Stepper(
                         "\(settings.sourceFontSize) pt",
@@ -112,7 +150,7 @@ private struct AppearanceSettingsView: View {
                 }
 
                 HStack {
-                    Text("内容边距")
+                    Text(L10n.tr(.settingsAppearanceContentPadding, language: language))
                     Spacer()
                     Stepper(
                         "\(settings.contentPadding) pt",
@@ -121,7 +159,7 @@ private struct AppearanceSettingsView: View {
                     )
                 }
             } header: {
-                Text("字体与排版")
+                Text(L10n.tr(.settingsAppearanceTypographyTitle, language: language))
             }
         }
         .formStyle(.grouped)
@@ -133,6 +171,20 @@ private struct AppearanceSettingsView: View {
         NSApp.appearance = mode.nsAppearance
         NSApp.windows.forEach { window in
             window.invalidateShadow()
+        }
+    }
+}
+
+// MARK: - LanguagePref 辅助扩展
+
+extension LanguagePref {
+    /// 获取语言偏好对应的本地化键
+    static func languageKey(for pref: LanguagePref) -> L10n.Key {
+        switch pref {
+        case .auto: .languageAuto
+        case .zhCN: .languageZhCN
+        case .zhTW: .languageZhTW
+        case .en: .languageEn
         }
     }
 }

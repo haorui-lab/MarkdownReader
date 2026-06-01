@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 /// 空状态占位视图，提示用户打开目录或文件
 struct WelcomeView: View {
     let appViewModel: AppViewModel
+    @Environment(\.language) private var language
 
     var body: some View {
         VStack(spacing: 16) {
@@ -13,15 +14,15 @@ struct WelcomeView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
 
-            Text("Open a folder to get started")
+            Text(L10n.tr(.welcomeOpenFolder, language: language))
                 .font(.title2)
                 .foregroundStyle(.primary)
 
-            Text("Press Cmd+O or click Open in toolbar")
+            Text(L10n.tr(.welcomePressCmdO, language: language))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Button("Open") {
+            Button(L10n.tr(.open, language: language)) {
                 openPanel()
             }
             .buttonStyle(.borderedProminent)
@@ -39,7 +40,7 @@ struct WelcomeView: View {
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "打开"
+        panel.prompt = L10n.tr(.open, language: language)
         panel.allowedContentTypes = [.folder, UTType(filenameExtension: "md")].compactMap { $0 }
 
         if panel.runModal() == .OK, let url = panel.url {

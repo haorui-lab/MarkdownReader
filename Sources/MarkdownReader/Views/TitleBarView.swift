@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct TitleBarView: View {
     let appViewModel: AppViewModel
     let documentViewModel: DocumentViewModel
+    @Environment(\.language) private var language
 
     var body: some View {
         HStack(spacing: 0) {
@@ -12,7 +13,7 @@ struct TitleBarView: View {
             trafficLightsAndSidebarToggle
 
             // 中间：文件名（作为拖拽区域的一部分）
-            Text(documentViewModel.hasDocument ? documentViewModel.fileName : "Markdown Reader")
+            Text(documentViewModel.hasDocument ? documentViewModel.fileName : L10n.tr(.appName, language: language))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
@@ -47,7 +48,7 @@ struct TitleBarView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .help("切换侧边栏 (⌘\\)")
+            .help(L10n.tr(.titleBarToggleSidebar, language: language))
             .disabled(appViewModel.isSingleFileMode)
             .opacity(appViewModel.isSingleFileMode ? 0.3 : 1)
         }
@@ -58,13 +59,12 @@ struct TitleBarView: View {
     private var rightControls: some View {
         HStack(spacing: 12) {
             // 渲染/原文切换
-            Picker("显示模式", selection: Binding(
+            Picker(L10n.tr(.titleBarDisplayMode, language: language), selection: Binding(
                 get: { documentViewModel.displayMode },
                 set: { documentViewModel.switchDisplayMode($0) }
             )) {
-                ForEach(DisplayMode.allCases, id: \.self) { mode in
-                    Text(mode.rawValue).tag(mode)
-                }
+                Text(L10n.tr(.displayModeRendered, language: language)).tag(DisplayMode.rendered)
+                Text(L10n.tr(.displayModeSource, language: language)).tag(DisplayMode.source)
             }
             .pickerStyle(.segmented)
             .frame(width: 140)
@@ -79,7 +79,7 @@ struct TitleBarView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .help("打开 (⌘O)")
+            .help(L10n.tr(.titleBarOpen, language: language))
         }
     }
 
@@ -91,7 +91,7 @@ struct TitleBarView: View {
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "打开"
+        panel.prompt = L10n.tr(.open, language: language)
         panel.allowedContentTypes = [.folder, UTType(filenameExtension: "md")].compactMap { $0 }
 
         if panel.runModal() == .OK, let url = panel.url {

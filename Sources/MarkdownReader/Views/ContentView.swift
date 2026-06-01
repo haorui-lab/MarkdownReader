@@ -5,13 +5,15 @@ struct ContentView: View {
     @State private var appViewModel = AppViewModel()
     @State private var fileTreeViewModel = FileTreeViewModel()
     @State private var documentViewModel = DocumentViewModel()
-    @State private var settings = SettingsModel()
+    @State private var gitViewModel = GitViewModel()
+    @State private var settings = SettingsModel.shared
 
     var body: some View {
         mainLayout
             .frame(minWidth: 650, minHeight: 450)
             .background(Color(nsColor: .windowBackgroundColor))
             .navigationTitle(appViewModel.windowTitle)
+            .environment(\.language, settings.languagePref.resolvedLanguage)
             .modifier(FullScreenStateModifier(appViewModel: appViewModel))
             .modifier(KeyboardShortcutModifier(
                 appViewModel: appViewModel,
@@ -36,6 +38,10 @@ struct ContentView: View {
                 appViewModel: appViewModel,
                 fileTreeViewModel: fileTreeViewModel,
                 settings: settings
+            ))
+            .modifier(GitStatusModifier(
+                appViewModel: appViewModel,
+                gitViewModel: gitViewModel
             ))
             .task {
                 applyAppearance(settings.appearanceMode)
@@ -63,6 +69,7 @@ struct ContentView: View {
                 appViewModel: appViewModel,
                 documentViewModel: documentViewModel,
                 fileTreeViewModel: fileTreeViewModel,
+                gitViewModel: gitViewModel,
                 settings: settings
             )
         }
@@ -223,5 +230,22 @@ private struct SettingsChangeModifier: ViewModifier {
         Task {
             await fileTreeViewModel.loadDirectory(dir)
         }
+    }
+}
+
+// MARK: - Git 状态刷新
+
+private struct GitStatusModifier: ViewModifier {
+    let appViewModel: AppViewModel
+    let gitViewModel: GitViewModel
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: appViewModel.rootDirectory) { _, _ in
+                gitViewModel.refreshStatus(directory: appViewModel.rootDirectory)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openDirectory)) { _ in
+                gitViewModel.refreshStatus(directory: appViewModel.rootDirectory)
+            }
     }
 }

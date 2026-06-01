@@ -7,6 +7,12 @@ import SwiftUI
 @Observable
 final class SettingsModel {
 
+    // MARK: - 单例
+
+    /// 全局共享实例，确保 ContentView 与 SettingsView 引用同一对象
+    /// 语言切换等设置变更可即时传播到所有视图
+    static let shared = SettingsModel()
+
     // MARK: - UserDefaults Keys
 
     private enum Keys {
@@ -17,6 +23,7 @@ final class SettingsModel {
         static let appearanceMode       = "com.markdownreader.appearanceMode"
         static let sourceFontSize       = "com.markdownreader.sourceFontSize"
         static let contentPadding       = "com.markdownreader.contentPadding"
+        static let languagePref       = "com.markdownreader.languagePref"
         static let lastOpenedDirectory  = "com.markdownreader.lastOpenedDirectory"
         static let lastOpenedFilePath   = "com.markdownreader.lastOpenedFilePath"
     }
@@ -24,6 +31,11 @@ final class SettingsModel {
     private let defaults = UserDefaults.standard
 
     // MARK: - 通用设置
+
+    /// 界面语言偏好
+    var languagePref: LanguagePref {
+        didSet { defaults.set(languagePref.rawValue, forKey: Keys.languagePref) }
+    }
 
     /// 默认显示模式（渲染 / 原文）
     var defaultDisplayMode: DisplayMode {
@@ -96,6 +108,7 @@ final class SettingsModel {
         let defaults = UserDefaults.standard
 
         self.defaultDisplayMode = DisplayMode(rawValue: defaults.string(forKey: Keys.defaultDisplayMode) ?? "") ?? .rendered
+        self.languagePref = LanguagePref(rawValue: defaults.string(forKey: Keys.languagePref) ?? "") ?? .auto
         self.reopenLastLocation = defaults.object(forKey: Keys.reopenLastLocation) as? Bool ?? false
         self.showHiddenFiles = defaults.object(forKey: Keys.showHiddenFiles) as? Bool ?? false
         self.showNonMarkdownFiles = defaults.object(forKey: Keys.showNonMarkdownFiles) as? Bool ?? true
