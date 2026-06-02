@@ -11,6 +11,8 @@ import SwiftUI
 struct GeneralSettingsView: View {
     @Bindable var settings: SettingsModel
     let language: Language
+    @State private var showSetDefaultFailed = false
+    @State private var isSettingDefault = false
 
     private var detectedLanguageName: String {
         LanguageService.detectLanguage().localizedName(language)
@@ -70,8 +72,57 @@ struct GeneralSettingsView: View {
                 Toggle(L10n.tr(.settingsGeneralShowHiddenFiles, language: language), isOn: $settings.showHiddenFiles)
                 Toggle(L10n.tr(.settingsGeneralShowNonMarkdownFiles, language: language), isOn: $settings.showNonMarkdownFiles)
             }
+
+            SettingsDivider()
+
+            // 默认打开程序
+            SettingsSection(
+                title: L10n.tr(.settingsGeneralDefaultOpenerTitle, language: language),
+                description: L10n.tr(.settingsGeneralDefaultOpenerDesc, language: language)
+            ) {
+                if settings.isDefaultMdOpener {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Color.green)
+                        Text(L10n.tr(.settingsGeneralIsDefault, language: language))
+                            .font(.system(size: 12))
+                    }
+                } else {
+                    Button {
+                        isSettingDefault = true
+                        settings.setAsDefaultMdOpener { success in
+                            isSettingDefault = false
+                            if !success {
+                                showSetDefaultFailed = true
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            if isSettingDefault {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "doc.text")
+                            }
+                            Text(L10n.tr(.settingsGeneralSetAsDefault, language: language))
+                        }
+                    }
+                    .disabled(isSettingDefault)
+                    .alert(
+                        L10n.tr(.settingsGeneralDefaultOpenerTitle, language: language),
+                        isPresented: $showSetDefaultFailed
+                    ) {
+                        Button("OK", role: .cancel) {}
+                    } message: {
+                        Text(L10n.tr(.settingsGeneralSetDefaultFailed, language: language))
+                    }
+                }
+            }
         }
         .padding(24)
+        .onAppear {
+            settings.refreshDefaultOpenerStatus()
+        }
     }
 }
 

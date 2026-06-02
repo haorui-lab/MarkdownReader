@@ -36,6 +36,13 @@ enum L10n {
         case settingsGeneralShowHiddenFiles
         case settingsGeneralShowNonMarkdownFiles
 
+        // 设置 - 默认打开程序
+        case settingsGeneralDefaultOpenerTitle
+        case settingsGeneralDefaultOpenerDesc
+        case settingsGeneralSetAsDefault
+        case settingsGeneralIsDefault
+        case settingsGeneralSetDefaultFailed
+
         // 设置 - 外观 - 主题模式
         case settingsAppearanceThemeTitle
         case settingsAppearanceThemeDesc
@@ -133,6 +140,11 @@ enum L10n {
         .settingsGeneralFileTreeTitle: "File Tree",
         .settingsGeneralShowHiddenFiles: "Show hidden files",
         .settingsGeneralShowNonMarkdownFiles: "Show non-Markdown files",
+        .settingsGeneralDefaultOpenerTitle: "Default Markdown Opener",
+        .settingsGeneralDefaultOpenerDesc: "Set Markdown Reader as the default application for opening .md files.",
+        .settingsGeneralSetAsDefault: "Set as Default",
+        .settingsGeneralIsDefault: "Markdown Reader is the default Markdown opener",
+        .settingsGeneralSetDefaultFailed: "Failed to set as default opener. Please try again.",
         .settingsAppearanceThemeTitle: "Theme",
         .settingsAppearanceThemeDesc: "Choose the application appearance mode.",
         .settingsAppearanceModeLight: "Light",
@@ -203,6 +215,11 @@ enum L10n {
         .settingsGeneralFileTreeTitle: "文件树",
         .settingsGeneralShowHiddenFiles: "显示隐藏文件",
         .settingsGeneralShowNonMarkdownFiles: "显示非 Markdown 文件",
+        .settingsGeneralDefaultOpenerTitle: "默认 Markdown 打开程序",
+        .settingsGeneralDefaultOpenerDesc: "将 Markdown Reader 设置为 .md 文件的默认打开程序。",
+        .settingsGeneralSetAsDefault: "设为默认",
+        .settingsGeneralIsDefault: "Markdown Reader 已是默认 Markdown 打开程序",
+        .settingsGeneralSetDefaultFailed: "设置默认打开程序失败，请重试。",
         .settingsAppearanceThemeTitle: "主题",
         .settingsAppearanceThemeDesc: "选择应用的外观模式。",
         .settingsAppearanceModeLight: "浅色",
@@ -273,6 +290,11 @@ enum L10n {
         .settingsGeneralFileTreeTitle: "檔案樹",
         .settingsGeneralShowHiddenFiles: "顯示隱藏檔案",
         .settingsGeneralShowNonMarkdownFiles: "顯示非 Markdown 檔案",
+        .settingsGeneralDefaultOpenerTitle: "預設 Markdown 開啟程式",
+        .settingsGeneralDefaultOpenerDesc: "將 Markdown Reader 設為 .md 檔案的預設開啟程式。",
+        .settingsGeneralSetAsDefault: "設為預設",
+        .settingsGeneralIsDefault: "Markdown Reader 已是預設 Markdown 開啟程式",
+        .settingsGeneralSetDefaultFailed: "設定預設開啟程式失敗，請重試。",
         .settingsAppearanceThemeTitle: "主題",
         .settingsAppearanceThemeDesc: "選擇應用的外觀模式。",
         .settingsAppearanceModeLight: "淺色",

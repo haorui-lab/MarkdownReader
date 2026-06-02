@@ -19,6 +19,17 @@ struct MarkdownReaderApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                // 处理从 Finder 双击或右键「用 Markdown Reader 打开」的文件
+                .onOpenURL { url in
+                    var isDir: ObjCBool = false
+                    FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+
+                    if isDir.boolValue {
+                        NotificationCenter.default.post(name: .openDirectory, object: url)
+                    } else {
+                        NotificationCenter.default.post(name: .openFile, object: url)
+                    }
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 900, height: 600)

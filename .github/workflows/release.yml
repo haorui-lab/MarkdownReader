@@ -85,24 +85,36 @@ jobs:
           if [ -d "$RESOURCE_BUNDLE" ]; then
             cp -R "$RESOURCE_BUNDLE/" "$RESOURCES_DIR/"
             echo "✅ Copied SPM resource bundle"
-          else
-            echo "⚠️  SPM resource bundle not found, falling back to actool for Assets.xcassets"
-            SDK_PATH=$(xcrun --show-sdk-path --sdk macosx)
-            actool \
-              --compile "$RESOURCES_DIR" \
-              --platform macosx \
-              --minimum-deployment-target 15.0 \
-              --sdk "$SDK_PATH" \
-              --app-icon AppIcon \
-              --output-format human-readable-text \
-              --output-partial-info-plist /tmp/partial.plist \
-              "Sources/${{ env.PRODUCT_NAME }}/Assets.xcassets"
           fi
+
+          # Always compile Assets.xcassets with actool to produce Assets.car
+          # macOS needs the compiled Assets.car (not raw PNGs) to display app icon
+          # SPM bundle only contains raw PNGs, not the compiled asset catalog
+          echo "📦 Compiling Assets.xcassets with actool..."
+          SDK_PATH=$(xcrun --show-sdk-path --sdk macosx)
+          actool \
+            --compile "$RESOURCES_DIR" \
+            --platform macosx \
+            --minimum-deployment-target 15.0 \
+            --sdk "$SDK_PATH" \
+            --app-icon AppIcon \
+            --output-format human-readable-text \
+            --output-partial-info-plist /tmp/partial.plist \
+            "Sources/${{ env.PRODUCT_NAME }}/Assets.xcassets"
 
           # Create PkgInfo
           echo -n "APPL????" > "$APP_DIR/Contents/PkgInfo"
 
           echo "✅ .app bundle assembled at $APP_DIR"
+
+      - name: Code sign .app
+        run: |
+          # Ad-hoc sign the app so macOS shows "unidentified developer" instead of "damaged"
+          # Users can bypass via System Settings > Privacy & Security
+          # For proper distribution, use Developer ID + notarization (requires Apple Developer account)
+          echo "🔏 Ad-hoc signing ${{ env.PRODUCT_NAME }}.app..."
+          codesign --force --deep --sign - "${{ env.PRODUCT_NAME }}.app"
+          echo "✅ App signed (ad-hoc)"
 
       - name: Create DMG
         run: |
@@ -119,7 +131,10 @@ jobs:
             "$DMG_NAME" \
             "${{ env.PRODUCT_NAME }}.app"
 
-          echo "✅ DMG created: $DMG_NAME"
+          # Ad-hoc sign the DMG as well
+          codesign --sign - "$DMG_NAME"
+
+          echo "✅ DMG created and signed: $DMG_NAME"
           echo "dmg_name=$DMG_NAME" >> "$GITHUB_ENV"
 
       - name: Create GitHub Release
@@ -130,22 +145,32 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           DMG_NAME="${{ env.PRODUCT_NAME }}-$VERSION.dmg"
 
-          # Check for release notes file, or extract current version from CHANGELOG
-          NOTES_ARGS=""
+          # Build release notes with install instructions
+          cat > /tmp/release-body.md << 'BODY'
+          ## 安装说明
+
+          1. 下载 `.dmg` 文件，双击打开
+          2. 将 **Markdown Reader** 拖入 **Applications** 文件夹
+          3. 首次打开时，macOS 可能提示「无法验证开发者」：
+             - 打开 **系统设置 > 隐私与安全性**
+             - 找到被阻止的 app，点击 **仍要打开**
+             - 或在终端运行：`xattr -cr /Applications/MarkdownReader.app`
+          4. 也可以直接右键点击 app → 选择 **打开**
+
+          ---
+
+          BODY
+
+          # Append changelog if available
           if [ -f "release-notes-${TAG}.md" ]; then
-            NOTES_ARGS="--notes-file release-notes-${TAG}.md"
+            cat "release-notes-${TAG}.md" >> /tmp/release-body.md
           elif [ -f "CHANGELOG.md" ]; then
-            # Extract only the section for this version (up to the next version heading)
-            # Keep a Changelog format: ## [1.0.0] - 2024-01-01
-            awk "/^## \\[.*${VERSION}.*\\]/,/^## \\[/" CHANGELOG.md | sed '$d' > /tmp/release-notes.md
-            if [ -s /tmp/release-notes.md ]; then
-              NOTES_ARGS="--notes-file /tmp/release-notes.md"
-            fi
+            awk "/^## \\[.*${VERSION}.*\\]/,/^## \\[/" CHANGELOG.md | sed '$d' >> /tmp/release-body.md
           fi
 
           gh release create "$TAG" \
             --title "$TAG" \
-            $NOTES_ARGS \
+            --notes-file /tmp/release-body.md \
             "$DMG_NAME"
 
           echo "✅ GitHub Release $TAG created with $DMG_NAME"

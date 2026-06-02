@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 设置模型，使用 @Observable + 手动 UserDefaults 同步
 /// @Observable 和 @AppStorage 不兼容，因此使用 didSet 手动同步到 UserDefaults
@@ -28,6 +29,7 @@ final class SettingsModel {
         static let themeCustomOverrides = "com.markdownreader.themeCustomOverrides"
         static let lastOpenedDirectory  = "com.markdownreader.lastOpenedDirectory"
         static let lastOpenedFilePath   = "com.markdownreader.lastOpenedFilePath"
+        static let isDefaultMdOpener    = "com.markdownreader.isDefaultMdOpener"
     }
 
     private let defaults = UserDefaults.standard
@@ -57,6 +59,12 @@ final class SettingsModel {
     /// 在侧边栏显示非 Markdown 文件
     var showNonMarkdownFiles: Bool {
         didSet { defaults.set(showNonMarkdownFiles, forKey: Keys.showNonMarkdownFiles) }
+    }
+
+    /// 是否已设为 .md 文件默认打开程序
+    /// 初始化时从系统实时检测；设置变更后同步写入 UserDefaults 作为缓存
+    var isDefaultMdOpener: Bool {
+        didSet { defaults.set(isDefaultMdOpener, forKey: Keys.isDefaultMdOpener) }
     }
 
     // MARK: - 外观设置
@@ -144,6 +152,53 @@ final class SettingsModel {
         CGFloat(min(max(contentPadding, 8), 40))
     }
 
+    // MARK: - 默认打开程序
+
+    /// 检查当前应用是否为 .md 文件的默认打开程序
+    static func checkIsDefaultMdOpener() -> Bool {
+        let bundleURL = Bundle.main.bundleURL
+        guard let mdType = UTType(filenameExtension: "md") else { return false }
+        if let defaultAppURL = NSWorkspace.shared.urlForApplication(toOpen: mdType) {
+            return defaultAppURL.resolvingSymlinksInPath() == bundleURL.resolvingSymlinksInPath()
+        }
+        return false
+    }
+
+    /// 将当前应用设为 .md 文件的默认打开程序
+    /// 使用 NSWorkspace 的 async completionHandler 验证设置结果
+    /// - Parameter completion: 设置结果回调（主线程），true 表示成功
+    func setAsDefaultMdOpener(completion: @MainActor @escaping (Bool) -> Void = { _ in }) {
+        let bundleURL = Bundle.main.bundleURL
+        guard let mdType = UTType(filenameExtension: "md") else {
+            completion(false)
+            return
+        }
+
+        NSWorkspace.shared.setDefaultApplication(at: bundleURL, toOpen: mdType) { [weak self] error1 in
+            let mdOk = error1 == nil
+            // 再设置 .markdown 扩展名
+            if let markdownType = UTType(filenameExtension: "markdown") {
+                NSWorkspace.shared.setDefaultApplication(at: bundleURL, toOpen: markdownType) { error2 in
+                    let success = mdOk || (error2 == nil)
+                    DispatchQueue.main.async {
+                        self?.isDefaultMdOpener = success
+                        completion(success)
+                    }
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self?.isDefaultMdOpener = mdOk
+                    completion(mdOk)
+                }
+            }
+        }
+    }
+
+    /// 刷新默认打开程序状态（从系统重新检测）
+    func refreshDefaultOpenerStatus() {
+        isDefaultMdOpener = Self.checkIsDefaultMdOpener()
+    }
+
     // MARK: - 初始化（从 UserDefaults 恢复）
 
     init() {
@@ -154,6 +209,7 @@ final class SettingsModel {
         self.reopenLastLocation = defaults.object(forKey: Keys.reopenLastLocation) as? Bool ?? false
         self.showHiddenFiles = defaults.object(forKey: Keys.showHiddenFiles) as? Bool ?? false
         self.showNonMarkdownFiles = defaults.object(forKey: Keys.showNonMarkdownFiles) as? Bool ?? true
+        self.isDefaultMdOpener = Self.checkIsDefaultMdOpener()
         self.appearanceMode = AppearanceMode(rawValue: defaults.string(forKey: Keys.appearanceMode) ?? "") ?? .system
         self.themeId = defaults.string(forKey: Keys.themeId) ?? "buddy-dark"
         if let data = defaults.data(forKey: Keys.themeCustomOverrides),
