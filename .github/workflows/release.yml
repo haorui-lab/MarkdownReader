@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. v1.0.0)'
+        required: true
+        type: string
+
+env:
+  SCHEME: MarkdownReader
+  PRODUCT_NAME: MarkdownReader
+  BUNDLE_ID: com.markdownreader.app
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.version }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          # Strip leading 'v' for numeric version
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG (version: $VERSION)"
+
+      - name: Validate CHANGELOG
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [ ! -f CHANGELOG.md ]; then
+            echo "❌ CHANGELOG.md not found!"
+            exit 1
+          fi
+          if ! grep -q "\\[$VERSION\\]" CHANGELOG.md && ! grep -q "\\[${{ steps.version.outputs.tag }}\\]" CHANGELOG.md; then
+            echo "❌ CHANGELOG.md does not contain version $VERSION or ${{ steps.version.outputs.tag }}"
+            echo "Please update CHANGELOG.md before releasing."
+            exit 1
+          fi
+          echo "✅ CHANGELOG.md validated for version $VERSION"
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Build
+        run: swift build -c release
+
+      - name: Assemble .app bundle
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          APP_DIR="${{ env.PRODUCT_NAME }}.app"
+          RESOURCES_DIR="$APP_DIR/Contents/Resources"
+          MACOS_DIR="$APP_DIR/Contents/MacOS"
+
+          # Create .app bundle structure
+          mkdir -p "$MACOS_DIR"
+          mkdir -p "$RESOURCES_DIR"
+
+          # Copy executable
+          cp ".build/release/${{ env.PRODUCT_NAME }}" "$MACOS_DIR/"
+
+          # Generate Info.plist from template with version substitution
+          sed "s/__VERSION__/$VERSION/g" scripts/Info.plist > "$APP_DIR/Contents/Info.plist"
+
+          # Copy SPM-compiled resource bundle (includes Assets.xcassets)
+          # SPM compiles resources into {TargetName}_{PackageName}.bundle during swift build
+          RESOURCE_BUNDLE=".build/release/${{ env.PRODUCT_NAME }}_MarkdownReader.bundle"
+          if [ -d "$RESOURCE_BUNDLE" ]; then
+            cp -R "$RESOURCE_BUNDLE/" "$RESOURCES_DIR/"
+            echo "✅ Copied SPM resource bundle"
+          else
+            echo "⚠️  SPM resource bundle not found, falling back to actool for Assets.xcassets"
+            SDK_PATH=$(xcrun --show-sdk-path --sdk macosx)
+            actool \
+              --compile "$RESOURCES_DIR" \
+              --platform macosx \
+              --minimum-deployment-target 15.0 \
+              --sdk "$SDK_PATH" \
+              --app-icon AppIcon \
+              --output-format human-readable-text \
+              --output-partial-info-plist /tmp/partial.plist \
+              "Sources/${{ env.PRODUCT_NAME }}/Assets.xcassets"
+          fi
+
+          # Create PkgInfo
+          echo -n "APPL????" > "$APP_DIR/Contents/PkgInfo"
+
+          echo "✅ .app bundle assembled at $APP_DIR"
+
+      - name: Create DMG
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="${{ env.PRODUCT_NAME }}-$VERSION.dmg"
+
+          create-dmg \
+            --volname "${{ env.PRODUCT_NAME }} $VERSION" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "${{ env.PRODUCT_NAME }}.app" 175 190 \
+            --app-drop-link 425 190 \
+            "$DMG_NAME" \
+            "${{ env.PRODUCT_NAME }}.app"
+
+          echo "✅ DMG created: $DMG_NAME"
+          echo "dmg_name=$DMG_NAME" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="${{ env.PRODUCT_NAME }}-$VERSION.dmg"
+
+          # Check for release notes file, or extract current version from CHANGELOG
+          NOTES_ARGS=""
+          if [ -f "release-notes-${TAG}.md" ]; then
+            NOTES_ARGS="--notes-file release-notes-${TAG}.md"
+          elif [ -f "CHANGELOG.md" ]; then
+            # Extract only the section for this version (up to the next version heading)
+            # Keep a Changelog format: ## [1.0.0] - 2024-01-01
+            awk "/^## \\[.*${VERSION}.*\\]/,/^## \\[/" CHANGELOG.md | sed '$d' > /tmp/release-notes.md
+            if [ -s /tmp/release-notes.md ]; then
+              NOTES_ARGS="--notes-file /tmp/release-notes.md"
+            fi
+          fi
+
+          gh release create "$TAG" \
+            --title "$TAG" \
+            $NOTES_ARGS \
+            "$DMG_NAME"
+
+          echo "✅ GitHub Release $TAG created with $DMG_NAME"

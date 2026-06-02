@@ -28,6 +28,9 @@ xcuserdata/
 .build/
 .swiftpm/
 
+# Build output
+*.app
+
 # CocoaPods
 Pods/
 
@@ -36,3 +39,9 @@ Carthage/Build/
 
 # Sisyphus
 .sisyphus/
+
+# Claude Code
+.claude/
+
+# Build artifacts
+docs/plan.html

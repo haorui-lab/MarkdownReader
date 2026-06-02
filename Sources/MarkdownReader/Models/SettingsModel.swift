@@ -108,12 +108,16 @@ final class SettingsModel {
 
     // MARK: - 计算属性
 
+    /// 系统当前是否为深色模式（运行时状态，不持久化）
+    /// 由 ContentView 通过 colorScheme 环境值驱动更新
+    var systemIsDark: Bool
+
     /// 解析后的主题类型（考虑跟随系统）
     var resolvedThemeType: ThemeType {
         switch appearanceMode {
         case .light: .light
         case .dark: .dark
-        case .system: NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .dark : .light
+        case .system: systemIsDark ? .dark : .light
         }
     }
 
@@ -160,6 +164,7 @@ final class SettingsModel {
         }
         self.sourceFontSize = defaults.object(forKey: Keys.sourceFontSize) as? Int ?? 13
         self.contentPadding = defaults.object(forKey: Keys.contentPadding) as? Int ?? 20
+        self.systemIsDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
 
         // 恢复上次位置（验证路径是否仍存在）
         if let dirPath = defaults.string(forKey: Keys.lastOpenedDirectory) {
