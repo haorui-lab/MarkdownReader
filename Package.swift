@@ -14,7 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(
-            url: "git@github.com:gonzalezreal/textual.git",
+            url: "https://github.com/gonzalezreal/textual.git",
             .upToNextMinor(from: "0.3.1")
         )
     ],
