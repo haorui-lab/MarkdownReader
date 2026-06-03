@@ -1,7 +1,7 @@
 #!/bin/bash
 # 一键构建 + 打包 MarkdownReader.dmg
 # 用法: ./package.sh
-set -e
+set -euo pipefail
 cd "$(dirname "$0")"
 
 # 1. 构建并签名
@@ -9,15 +9,18 @@ cd "$(dirname "$0")"
 
 # 2. 打包 DMG
 STAGING=$(mktemp -d)
+trap "rm -rf '$STAGING'" EXIT  # 确保临时目录即使出错也会被清理
 cp -R MarkdownReader.app "$STAGING/"
 ln -s /Applications "$STAGING/Applications"
 hdiutil create -volname "Markdown Reader" -srcfolder "$STAGING" -ov -format UDZO MarkdownReader.dmg
-rm -rf "$STAGING"
 
-# 3. 移除 quarantine 属性，避免微信等传输后触发 Gatekeeper
-# 注意：这只会移除本地文件的 quarantine，接收方下载后仍可能有自己的 quarantine
-# 但对于 ad-hoc 签名的应用，右键打开即可绕过
-xattr -d com.apple.quarantine MarkdownReader.dmg 2>/dev/null || true
+# 3. 移除 quarantine 属性，避免传输后触发 Gatekeeper
+xattr -cr MarkdownReader.dmg 2>/dev/null || true
+
+# 4. 验证
+echo "🔍 验证构建结果..."
+file MarkdownReader.app/Contents/MacOS/MarkdownReader
+codesign --verify --deep --strict MarkdownReader.app 2>&1 || true
 
 echo ""
 echo "✅ MarkdownReader.dmg 已生成"
