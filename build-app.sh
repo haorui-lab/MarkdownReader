@@ -12,11 +12,20 @@ PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="debug"
 SIGN_IDENTITY=""
 DISTRIBUTION=false
+ARCH=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         -r|--release) CONFIG="release" ;;
         -d|--distribution) DISTRIBUTION=true ;;
+        -a|--arch)
+            if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
+                ARCH="$2"
+                shift
+            else
+                ARCH="$(uname -m)"
+            fi
+            ;;
         -s|--sign)
             if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
                 SIGN_IDENTITY="$2"
@@ -30,10 +39,23 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-echo "🔨 构建 ${APP_NAME} (${CONFIG}, arm64)..."
-swift build -c "$CONFIG"
+# 默认使用本机架构
+if [[ -z "$ARCH" ]]; then
+    ARCH="$(uname -m)"
+fi
 
-BUILD_DIR="${PROJECT_DIR}/.build/arm64-apple-macosx/${CONFIG}"
+echo "🔨 构建 ${APP_NAME} (${CONFIG}, ${ARCH})..."
+
+# 交叉编译时指定目标架构
+if [[ "$ARCH" == "x86_64" ]]; then
+    swift build -c "$CONFIG" --arch x86_64
+elif [[ "$ARCH" == "arm64" ]]; then
+    swift build -c "$CONFIG" --arch arm64
+else
+    swift build -c "$CONFIG"
+fi
+
+BUILD_DIR="${PROJECT_DIR}/.build/${ARCH}-apple-macosx/${CONFIG}"
 APP_BUNDLE="${PROJECT_DIR}/${APP_NAME}.app"
 
 # 清理旧的
