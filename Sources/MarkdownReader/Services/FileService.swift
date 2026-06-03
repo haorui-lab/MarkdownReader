@@ -95,6 +95,18 @@ struct FileService: Sendable {
         }
     }
 
+    /// 写入文件内容
+    /// - Parameters:
+    ///   - url: 文件 URL
+    ///   - content: 要写入的内容
+    func writeFile(at url: URL, content: String) async throws {
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            throw FileError.permissionDenied(url)
+        }
+    }
+
     /// 检查目录是否包含 Markdown 文件
     /// - Parameters:
     ///   - directory: 要检查的目录

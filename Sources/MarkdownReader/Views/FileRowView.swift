@@ -4,7 +4,13 @@ import SwiftUI
 struct FileRowView: View {
     let node: FileNode
     let fileTreeViewModel: FileTreeViewModel
+    let documentViewModel: DocumentViewModel
     @Environment(\.themeColors) private var themeColors
+
+    /// 当前文件是否有未保存的修改
+    private var isDirty: Bool {
+        !node.isDirectory && documentViewModel.isFileDirty(at: node.path)
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -21,6 +27,11 @@ struct FileRowView: View {
             Text(node.name)
                 .foregroundStyle(node.isMarkdown || node.isDirectory ? themeColors.ink : themeColors.fgSecondary)
                 .lineLimit(1)
+
+            if isDirty {
+                Text("*")
+                    .foregroundStyle(themeColors.accent)
+            }
 
             Spacer()
         }

@@ -188,8 +188,13 @@ final class AppViewModel {
 
     // MARK: - 私有方法
 
+    var hasUnsavedUntitled: Bool = false
+    var untitledFileName: String = ""
+
     private func updateWindowTitle() {
-        if isSingleFileMode, let url = singleFileURL {
+        if hasUnsavedUntitled {
+            windowTitle = "Markdown Reader — \(untitledFileName)"
+        } else if isSingleFileMode, let url = singleFileURL {
             windowTitle = "Markdown Reader — \(url.lastPathComponent)"
         } else if let dir = rootDirectory {
             windowTitle = "Markdown Reader — \(dir.lastPathComponent)"

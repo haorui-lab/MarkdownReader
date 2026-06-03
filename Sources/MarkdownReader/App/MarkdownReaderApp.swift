@@ -96,12 +96,22 @@ struct MarkdownReaderApp: App {
                 .keyboardShortcut(",", modifiers: .command)
             }
 
-            // 文件菜单：打开 + 打开最近
+            // 文件菜单：新建 + 打开 + 保存 + 打开最近
             CommandGroup(replacing: .newItem) {
+                Button(L10n.tr(.menuNewFile, language: language)) {
+                    NotificationCenter.default.post(name: .newFile, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: .command)
+
                 Button(L10n.tr(.open, language: language) + "...") {
                     OpenPanelHelper.show(language: language)
                 }
                 .keyboardShortcut("o", modifiers: .command)
+
+                Button(L10n.tr(.titleBarSave, language: language)) {
+                    NotificationCenter.default.post(name: .saveFile, object: nil)
+                }
+                .keyboardShortcut("s", modifiers: .command)
 
                 // 打开最近子菜单
                 openRecentMenu
@@ -140,5 +150,8 @@ extension Notification.Name {
     static let openFile = Notification.Name("com.markdownreader.openFile")
     static let toggleSettings = Notification.Name("com.markdownreader.toggleSettings")
     static let openPanel = Notification.Name("com.markdownreader.openPanel")
+    static let newFile = Notification.Name("com.markdownreader.newFile")
+    static let saveFile = Notification.Name("com.markdownreader.saveFile")
+    static let saveAsFile = Notification.Name("com.markdownreader.saveAsFile")
     static let clearRecentItems = Notification.Name("com.markdownreader.clearRecentItems")
 }

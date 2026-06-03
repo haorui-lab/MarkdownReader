@@ -32,6 +32,15 @@ final class FileTreeViewModel {
     /// 设置模型（用于读取文件树过滤设置）
     var settings: SettingsModel
 
+    /// 文件系统监控器
+    private let fileSystemWatcher = FileSystemWatcher()
+
+    /// 是否正在刷新（防止并发刷新）
+    private var isRefreshing = false
+
+    /// 是否有待处理的刷新请求
+    private var needsRefresh = false
+
     // MARK: - 初始化
 
     init(fileService: FileService = FileService(), settings: SettingsModel = SettingsModel.shared) {
@@ -47,6 +56,9 @@ final class FileTreeViewModel {
         isLoading = true
         errorMessage = nil
         isEmptyDirectory = false
+
+        // 停止之前的监控
+        fileSystemWatcher.stopWatching()
 
         do {
             let children = try await fileService.scanDirectory(
@@ -76,6 +88,87 @@ final class FileTreeViewModel {
         }
 
         isLoading = false
+
+        // 开始监控目录变化
+        startWatching(directory)
+    }
+
+    /// 刷新目录树（由文件系统监控触发，不显示加载状态，保留展开和选中状态）
+    func refreshDirectory() async {
+        if isRefreshing {
+            // 已有刷新在进行中，标记需要再次刷新
+            needsRefresh = true
+            return
+        }
+
+        guard let dir = rootDirectory else { return }
+
+        // 检查根目录是否仍然存在
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir), isDir.boolValue else {
+            // 根目录已被删除或移动
+            clearDirectory()
+            errorMessage = "目录已被删除或移动"
+            return
+        }
+
+        isRefreshing = true
+
+        do {
+            let children = try await fileService.scanDirectory(
+                dir,
+                showHiddenFiles: settings.showHiddenFiles,
+                showNonMarkdownFiles: settings.showNonMarkdownFiles
+            )
+
+            let rootNode = FileNode(
+                name: dir.lastPathComponent,
+                path: dir,
+                isDirectory: true,
+                children: children
+            )
+            nodes = [rootNode]
+
+            // 清理已不存在的展开目录
+            let allPaths = Set(collectAllPaths(from: nodes))
+            expandedDirs = expandedDirs.intersection(allPaths)
+            expandedDirs.insert(dir)
+
+            // 如果选中的文件已不存在，清除选中
+            if let selected = selectedFileURL, !allPaths.contains(selected) {
+                selectedFileURL = nil
+            }
+
+            isEmptyDirectory = !fileService.directoryContainsMarkdown(
+                dir,
+                showHiddenFiles: settings.showHiddenFiles
+            )
+            errorMessage = nil
+        } catch {
+            // 刷新失败时不覆盖已有数据，仅记录错误
+        }
+
+        isRefreshing = false
+
+        // 如果刷新期间有新的变更，再次刷新
+        if needsRefresh {
+            needsRefresh = false
+            Task { @MainActor in
+                await refreshDirectory()
+            }
+        }
+    }
+
+    /// 停止文件监控并清空目录树
+    func clearDirectory() {
+        fileSystemWatcher.stopWatching()
+        nodes = []
+        expandedDirs = []
+        selectedFileURL = nil
+        errorMessage = nil
+        isEmptyDirectory = false
+        isRefreshing = false
+        needsRefresh = false
     }
 
     /// 切换目录展开/折叠
@@ -133,6 +226,69 @@ final class FileTreeViewModel {
         }
 
         return node
+    }
+
+    // MARK: - 新建文件
+
+    /// 在指定目录下创建新的 Markdown 文件
+    /// - Parameter directory: 目标目录 URL，若为 nil 则使用根目录
+    /// - Returns: 新建文件的 URL，失败返回 nil
+    func createNewFile(in directory: URL? = nil) -> URL? {
+        let targetDir = directory ?? rootDirectory
+        guard let dir = targetDir else { return nil }
+
+        // 生成不重名的文件名
+        var fileName = "Untitled.md"
+        var fileURL = dir.appendingPathComponent(fileName)
+        var counter = 1
+        while FileManager.default.fileExists(atPath: fileURL.path) {
+            fileName = "Untitled \(counter).md"
+            fileURL = dir.appendingPathComponent(fileName)
+            counter += 1
+        }
+
+        // 创建空文件
+        guard FileManager.default.createFile(atPath: fileURL.path, contents: nil) else {
+            return nil
+        }
+
+        // 刷新目录树（使用 refreshDirectory 避免重启监控器）
+        Task {
+            await refreshDirectory()
+            // 选中新建的文件
+            selectedFileURL = fileURL
+        }
+
+        return fileURL
+    }
+
+    /// 根目录 URL（供外部访问）
+    var rootDirectory: URL? {
+        nodes.first?.path
+    }
+
+    // MARK: - 文件监控
+
+    /// 开始监控目录变化
+    private func startWatching(_ directory: URL) {
+        fileSystemWatcher.startWatching(url: directory) { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                await self.refreshDirectory()
+            }
+        }
+    }
+
+    /// 收集所有节点路径（用于清理展开状态和选中状态）
+    private func collectAllPaths(from nodes: [FileNode]) -> [URL] {
+        var paths: [URL] = []
+        for node in nodes {
+            paths.append(node.path)
+            if let children = node.children {
+                paths.append(contentsOf: collectAllPaths(from: children))
+            }
+        }
+        return paths
     }
 
     // MARK: - 私有方法

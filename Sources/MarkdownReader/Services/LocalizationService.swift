@@ -89,7 +89,24 @@ enum L10n {
 
         // 通用操作
         case open
+        case save
         case reset
+
+        // 菜单
+        case menuNewFile
+
+        // 未保存更改提醒
+        case unsavedChangesTitle
+        case unsavedChangesMessage
+        case unsavedSave
+        case unsavedDontSave
+        case unsavedCancel
+
+        // 文件外部删除提醒
+        case fileDeletedTitle
+        case fileDeletedMessage
+        case fileDeletedSaveAs
+        case fileDeletedDiscard
 
         // 打开最近
         case openRecent
@@ -102,6 +119,8 @@ enum L10n {
         case titleBarToggleSidebar
         case titleBarDisplayMode
         case titleBarOpen
+        case titleBarNewFile
+        case titleBarSave
         case titleBarToggleOutline
 
         // 大纲
@@ -173,7 +192,18 @@ enum L10n {
         .displayModeRendered: "Rendered",
         .displayModeRaw: "Raw",
         .open: "Open",
+        .save: "Save",
         .reset: "Reset",
+        .menuNewFile: "New File",
+        .unsavedChangesTitle: "Unsaved Changes",
+        .unsavedChangesMessage: "Your changes will be lost if you don't save them. Do you want to save before closing?",
+        .unsavedSave: "Save",
+        .unsavedDontSave: "Don't Save",
+        .unsavedCancel: "Cancel",
+        .fileDeletedTitle: "File Deleted",
+        .fileDeletedMessage: "The file \"{name}\" was deleted externally. You have unsaved changes.",
+        .fileDeletedSaveAs: "Save As\u{2026}",
+        .fileDeletedDiscard: "Discard Changes",
         .openRecent: "Open Recent",
         .openRecentEmpty: "No Recent Items",
         .openRecentFiles: "Files",
@@ -182,6 +212,8 @@ enum L10n {
         .titleBarToggleSidebar: "Toggle Sidebar (⌘\\)",
         .titleBarDisplayMode: "Display Mode",
         .titleBarOpen: "Open (⌘O)",
+        .titleBarNewFile: "New File",
+        .titleBarSave: "Save (⌘S)",
         .titleBarToggleOutline: "Toggle Outline",
         .outlineTitle: "Outline",
         .outlineEmpty: "No headings",
@@ -243,9 +275,20 @@ enum L10n {
         .languageZhTW: "繁體中文",
         .languageEn: "English",
         .displayModeRendered: "渲染",
-        .displayModeRaw: "原始",
+        .displayModeRaw: "编辑",
         .open: "打开",
+        .save: "保存",
         .reset: "重置",
+        .menuNewFile: "新建文件",
+        .unsavedChangesTitle: "未保存的更改",
+        .unsavedChangesMessage: "如果不保存，您的更改将会丢失。关闭前是否保存？",
+        .unsavedSave: "保存",
+        .unsavedDontSave: "不保存",
+        .unsavedCancel: "取消",
+        .fileDeletedTitle: "文件已被删除",
+        .fileDeletedMessage: "文件「{name}」已被外部删除，您有未保存的更改。",
+        .fileDeletedSaveAs: "另存为\u{2026}",
+        .fileDeletedDiscard: "放弃更改",
         .openRecent: "打开最近使用",
         .openRecentEmpty: "无最近打开的项",
         .openRecentFiles: "文件",
@@ -254,6 +297,8 @@ enum L10n {
         .titleBarToggleSidebar: "切换侧边栏 (⌘\\)",
         .titleBarDisplayMode: "显示模式",
         .titleBarOpen: "打开 (⌘O)",
+        .titleBarNewFile: "新建文件",
+        .titleBarSave: "保存 (⌘S)",
         .titleBarToggleOutline: "切换大纲",
         .outlineTitle: "大纲",
         .outlineEmpty: "暂无标题",
@@ -315,9 +360,20 @@ enum L10n {
         .languageZhTW: "繁體中文",
         .languageEn: "English",
         .displayModeRendered: "渲染",
-        .displayModeRaw: "原始",
+        .displayModeRaw: "編輯",
         .open: "開啟",
+        .save: "儲存",
         .reset: "重設",
+        .menuNewFile: "新增檔案",
+        .unsavedChangesTitle: "未儲存的變更",
+        .unsavedChangesMessage: "如果不儲存，您的變更將會遺失。關閉前是否儲存？",
+        .unsavedSave: "儲存",
+        .unsavedDontSave: "不儲存",
+        .unsavedCancel: "取消",
+        .fileDeletedTitle: "檔案已被刪除",
+        .fileDeletedMessage: "檔案「{name}」已被外部刪除，您有未儲存的變更。",
+        .fileDeletedSaveAs: "另存為\u{2026}",
+        .fileDeletedDiscard: "放棄變更",
         .openRecent: "開啟最近使用",
         .openRecentEmpty: "無最近開啟的項目",
         .openRecentFiles: "檔案",
@@ -326,6 +382,8 @@ enum L10n {
         .titleBarToggleSidebar: "切換側邊欄 (⌘\\)",
         .titleBarDisplayMode: "顯示模式",
         .titleBarOpen: "開啟 (⌘O)",
+        .titleBarNewFile: "新增檔案",
+        .titleBarSave: "儲存 (⌘S)",
         .titleBarToggleOutline: "切換大綱",
         .outlineTitle: "大綱",
         .outlineEmpty: "暫無標題",

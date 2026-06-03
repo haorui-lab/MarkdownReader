@@ -66,7 +66,9 @@ struct TrafficLightButtons: View {
     // MARK: - 窗口操作
 
     private func closeWindow() {
-        NSApp.keyWindow?.close()
+        // 使用 performClose 触发 NSWindowDelegate.windowShouldClose 检查
+        // 而非直接 close()，以确保未保存更改提醒生效
+        NSApp.keyWindow?.performClose(nil)
     }
 
     private func miniaturizeWindow() {

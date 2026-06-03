@@ -4,30 +4,17 @@ import SwiftUI
 struct SidebarView: View {
     let fileTreeViewModel: FileTreeViewModel
     let appViewModel: AppViewModel
+    let documentViewModel: DocumentViewModel
     @Environment(\.language) private var language
     @Environment(\.themeColors) private var themeColors
 
     var body: some View {
         VStack(spacing: 0) {
-            // 顶部区域：自定义红绿灯 + 打开按钮 + Sidebar 隐藏按钮（50px）
+            // 顶部区域：自定义红绿灯 + Sidebar 隐藏按钮 + 打开按钮 + 新建文件按钮（50px）
             HStack(spacing: 0) {
                 // 自定义红绿灯按钮
                 TrafficLightButtons()
                     .padding(.leading, 12)
-
-                Spacer()
-
-                // 打开按钮（与菜单 Cmd+O 功能一致）
-                Button {
-                    NotificationCenter.default.post(name: .openPanel, object: nil)
-                } label: {
-                    Image(systemName: "folder.badge.plus")
-                        .font(.system(size: 14))
-                        .foregroundStyle(themeColors.fgSecondary)
-                }
-                .buttonStyle(.plain)
-                .help(L10n.tr(.titleBarOpen, language: language))
-                .padding(.trailing, 4)
 
                 // Sidebar 隐藏按钮
                 Button {
@@ -39,7 +26,33 @@ struct SidebarView: View {
                 }
                 .buttonStyle(.plain)
                 .help(L10n.tr(.titleBarToggleSidebar, language: language))
-                .padding(.trailing, 8)
+                .padding(.leading, 8)
+
+                // 打开按钮（与菜单 Cmd+O 功能一致）
+                Button {
+                    NotificationCenter.default.post(name: .openPanel, object: nil)
+                } label: {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(themeColors.fgSecondary)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.tr(.titleBarOpen, language: language))
+                .padding(.leading, 4)
+
+                // 新建文件按钮
+                Button {
+                    NotificationCenter.default.post(name: .newFile, object: nil)
+                } label: {
+                    Image(systemName: "doc.badge.plus")
+                        .font(.system(size: 14))
+                        .foregroundStyle(themeColors.fgSecondary)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.tr(.titleBarNewFile, language: language))
+                .padding(.leading, 4)
+
+                Spacer()
             }
             .frame(height: 50)
 
@@ -78,6 +91,11 @@ struct SidebarView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(themeColors.ink)
                             .lineLimit(1)
+                        if documentViewModel.isFileDirty(at: url) {
+                            Text("*")
+                                .font(.system(size: 13))
+                                .foregroundStyle(themeColors.accent)
+                        }
                     }
                     .padding(.vertical, 4)
                     .contentShape(Rectangle())
@@ -98,7 +116,7 @@ struct SidebarView: View {
     private var directoryTreeView: some View {
         List {
             ForEach(fileTreeViewModel.nodes) { node in
-                FileNodeRow(node: node, fileTreeViewModel: fileTreeViewModel)
+                FileNodeRow(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
             }
         }
         .listStyle(.sidebar)
@@ -186,6 +204,7 @@ struct SidebarView: View {
 struct FileNodeRow: View {
     let node: FileNode
     let fileTreeViewModel: FileTreeViewModel
+    let documentViewModel: DocumentViewModel
     @Environment(\.themeColors) private var themeColors
 
     /// 是否为当前选中项
@@ -217,10 +236,10 @@ struct FileNodeRow: View {
                 )
             ) {
                 ForEach(children) { child in
-                    FileNodeRow(node: child, fileTreeViewModel: fileTreeViewModel)
+                    FileNodeRow(node: child, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
                 }
             } label: {
-                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel)
+                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         // 点击目录标签区域切换展开/折叠
@@ -233,7 +252,7 @@ struct FileNodeRow: View {
             Button {
                 fileTreeViewModel.selectFile(node)
             } label: {
-                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel)
+                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
             }
             .buttonStyle(.plain)
             .listRowBackground(selectionBackground)

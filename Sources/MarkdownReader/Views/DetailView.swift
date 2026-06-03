@@ -82,28 +82,47 @@ struct DetailView: View {
                 Button {
                     NotificationCenter.default.post(name: .openPanel, object: nil)
                 } label: {
-                    Image(systemName: "folder.badge.plus")
+                    Image(systemName: "folder.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(themeColors.fgSecondary)
                 }
                 .buttonStyle(.plain)
                 .help(L10n.tr(.titleBarOpen, language: language))
-                .padding(.leading, 8)
+                .padding(.leading, 4)
+
+                // 新建文件按钮（始终可用，无需打开目录）
+                Button {
+                    NotificationCenter.default.post(name: .newFile, object: nil)
+                } label: {
+                    Image(systemName: "doc.badge.plus")
+                        .font(.system(size: 14))
+                        .foregroundStyle(themeColors.fgSecondary)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.tr(.titleBarNewFile, language: language))
+                .padding(.leading, 4)
             }
 
-            // 文件绝对路径（左对齐，仅在有文档时显示）
-            if documentViewModel.hasDocument, let path = documentViewModel.currentFileURL?.path {
-                Text(path)
-                    .font(.system(size: 12))
-                    .foregroundStyle(themeColors.fgMuted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.leading, 12)
+            // 文件路径或 Untitled 标识（左对齐，仅在有文档时显示）
+            if documentViewModel.hasDocument {
+                if documentViewModel.isUntitled {
+                    Text(documentViewModel.fileName)
+                        .font(.system(size: 12))
+                        .foregroundStyle(themeColors.fgMuted)
+                        .padding(.leading, 12)
+                } else if let path = documentViewModel.currentFileURL?.path {
+                    Text(path)
+                        .font(.system(size: 12))
+                        .foregroundStyle(themeColors.fgMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.leading, 12)
+                }
             }
 
             Spacer()
 
-            // 渲染 / 原始模式切换
+            // 渲染 / 编辑模式切换
             if documentViewModel.hasDocument {
                 Picker("", selection: Binding(
                     get: { documentViewModel.displayMode },
@@ -114,6 +133,21 @@ struct DetailView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 140)
+                .padding(.trailing, 8)
+            }
+
+            // 保存按钮（在渲染模式切换右侧）
+            if documentViewModel.hasDocument {
+                Button {
+                    NotificationCenter.default.post(name: .saveFile, object: nil)
+                } label: {
+                    Image(systemName: "arrow.down.doc.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(documentViewModel.isDirty ? themeColors.accent : themeColors.fgMuted)
+                }
+                .buttonStyle(.plain)
+                .disabled(!documentViewModel.isDirty)
+                .help(L10n.tr(.titleBarSave, language: language))
                 .padding(.trailing, 8)
             }
 
@@ -137,22 +171,20 @@ struct DetailView: View {
 
     @ViewBuilder
     private var contentArea: some View {
-        if appViewModel.rootDirectory == nil && !appViewModel.isSingleFileMode {
+        if documentViewModel.hasDocument {
+            documentContentWithOutline
+        } else if appViewModel.rootDirectory == nil && !appViewModel.isSingleFileMode {
             WelcomeView(appViewModel: appViewModel)
         } else if let error = documentViewModel.fileError {
             ErrorView(
                 icon: "exclamationmark.triangle",
                 message: error.localizedDescription
             )
-        } else if documentViewModel.isLoading && !documentViewModel.hasDocument {
+        } else if documentViewModel.isLoading {
             // 仅在首次加载（无已有文档）时显示进度指示器
-            // 文件切换时 hasDocument 仍为 true（旧文件 URL 未清空），
-            // 保持文档内容视图存活，防止 NSTextView 被释放导致 undo 崩溃
             ProgressView()
                 .tint(themeColors.fgSecondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if documentViewModel.hasDocument {
-            documentContentWithOutline
         } else if !appViewModel.isSingleFileMode && fileTreeViewModel.isEmptyDirectory {
             ErrorView(
                 icon: "folder",
