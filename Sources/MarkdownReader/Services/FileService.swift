@@ -39,8 +39,7 @@ struct FileService: Sendable {
                     showHiddenFiles: showHiddenFiles,
                     showNonMarkdownFiles: showNonMarkdownFiles
                 )
-                // 如果目录内没有可见文件，跳过空目录
-                guard !children.isEmpty else { continue }
+                // 空目录也显示（children 为空数组），以便用户新建空目录后能立即看到
                 let node = FileNode(
                     name: name,
                     path: url,
