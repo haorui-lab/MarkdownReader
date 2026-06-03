@@ -5,6 +5,23 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.1] - 2026-06-03
+
+### 新增
+
+- **AppDelegate 文件打开处理**：新增 AppDelegate 处理冷启动/热启动时的文件打开事件，通过 `lastHandledURL` 去重防止 `.onOpenURL` 和 AppDelegate 同时触发导致重复打开
+- **文件外部修改检测**：集成 FileSystemWatcher，实时监控当前文件所在目录的变更；未修改文件自动静默刷新，已修改文件显示刷新按钮
+- **重新加载功能**：标题栏刷新按钮（文件被外部修改时显示）、侧边栏右键菜单「重新加载」选项，支持从磁盘重新加载文件（丢弃当前未保存修改）
+- **重新加载确认弹窗**：有未保存修改时弹出确认对话框，支持「以后不再提醒」选项
+- **skipFileModifiedAlert 设置**：允许用户关闭外部修改确认弹窗，直接静默重新加载
+- **本地化**：新增 `fileModifiedExternallyTitle/Message/Reload/DontRemind`、`titleBarReload`、`contextMenuReload` 共 7 个本地化键值（简中/繁中/英文）
+
+### 变更
+
+- 双击文件启动应用时，跳过恢复上次打开位置，优先打开用户点击的文件
+- 禁用 macOS 窗口标签页功能（隐藏「显示标签页栏」菜单项）
+- 保存文件后清除外部修改标记，避免误显示刷新按钮
+
 ## [1.0.0] - 2026-06-03
 
 首个正式版本。Markdown Reader 是一款 macOS 原生 Markdown 阅读器，采用 SwiftUI + Textual 构建，提供三栏布局：左侧目录树导航 + 中间 Markdown 渲染 + 右侧大纲导航。
