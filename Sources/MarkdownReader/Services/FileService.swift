@@ -133,4 +133,44 @@ struct FileService: Sendable {
         }
         return false
     }
+
+    /// 重命名文件或目录
+    /// - Parameters:
+    ///   - url: 原始 URL
+    ///   - newName: 新名称（仅文件名，不含路径）
+    /// - Returns: 重命名后的新 URL
+    func renameItem(at url: URL, to newName: String) throws -> URL {
+        let newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
+        try FileManager.default.moveItem(at: url, to: newURL)
+        return newURL
+    }
+
+    /// 将文件或目录移到废纸篓
+    /// - Parameter url: 要删除的文件/目录 URL
+    func trashItem(at url: URL) throws {
+        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+    }
+
+    /// 创建子目录
+    /// - Parameters:
+    ///   - parentDirectory: 父目录 URL
+    ///   - name: 子目录名称
+    /// - Returns: 新建目录的 URL
+    @discardableResult
+    func createDirectory(in parentDirectory: URL, name: String) throws -> URL {
+        let newURL = parentDirectory.appendingPathComponent(name)
+        try FileManager.default.createDirectory(at: newURL, withIntermediateDirectories: false)
+        return newURL
+    }
+
+    /// 移动文件或目录到目标目录
+    /// - Parameters:
+    ///   - source: 源 URL
+    ///   - destination: 目标目录 URL
+    /// - Returns: 移动后的新 URL
+    func moveItem(at source: URL, to destination: URL) throws -> URL {
+        let newURL = destination.appendingPathComponent(source.lastPathComponent)
+        try FileManager.default.moveItem(at: source, to: newURL)
+        return newURL
+    }
 }

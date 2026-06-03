@@ -137,6 +137,23 @@ enum L10n {
         case welcomeOpenFolder
         case welcomePressCmdO
         case selectFileHint
+
+        // 右键菜单
+        case contextMenuNewFile
+        case contextMenuNewSubdirectory
+        case contextMenuRename
+        case contextMenuMoveTo
+        case contextMenuDelete
+
+        // 右键菜单 - 对话框
+        case renameTitle
+        case renameMessage
+        case renameEmptyName
+        case renameNameExists
+        case deleteTitle
+        case deleteMessage
+        case deleteDirectoryMessage
+        case moveSelectFolder
     }
 
     // MARK: - 翻译字典
@@ -224,6 +241,19 @@ enum L10n {
         .welcomeOpenFolder: "Open a folder to get started",
         .welcomePressCmdO: "Press Cmd+O or click Open in toolbar",
         .selectFileHint: "Select a file to preview",
+        .contextMenuNewFile: "New File",
+        .contextMenuNewSubdirectory: "New Subdirectory",
+        .contextMenuRename: "Rename",
+        .contextMenuMoveTo: "Move to\u{2026}",
+        .contextMenuDelete: "Move to Trash",
+        .renameTitle: "Rename",
+        .renameMessage: "Enter a new name for \"{name}\":",
+        .renameEmptyName: "Name cannot be empty.",
+        .renameNameExists: "An item with this name already exists.",
+        .deleteTitle: "Move to Trash",
+        .deleteMessage: "Are you sure you want to move \"{name}\" to the Trash?",
+        .deleteDirectoryMessage: "Are you sure you want to move \"{name}\" and all its contents to the Trash?",
+        .moveSelectFolder: "Select Destination Folder",
     ]
 
     private static let zhCN: [Key: String] = [
@@ -309,6 +339,19 @@ enum L10n {
         .welcomeOpenFolder: "打开文件夹开始阅读",
         .welcomePressCmdO: "按 Cmd+O 或点击工具栏中的打开按钮",
         .selectFileHint: "选择文件以预览",
+        .contextMenuNewFile: "新建文档",
+        .contextMenuNewSubdirectory: "新建子目录",
+        .contextMenuRename: "重命名",
+        .contextMenuMoveTo: "移动到\u{2026}",
+        .contextMenuDelete: "移到废纸篓",
+        .renameTitle: "重命名",
+        .renameMessage: "输入「{name}」的新名称：",
+        .renameEmptyName: "名称不能为空。",
+        .renameNameExists: "已存在同名项目。",
+        .deleteTitle: "移到废纸篓",
+        .deleteMessage: "确定要将「{name}」移到废纸篓吗？",
+        .deleteDirectoryMessage: "确定要将「{name}」及其所有内容移到废纸篓吗？",
+        .moveSelectFolder: "选择目标文件夹",
     ]
 
     private static let zhTW: [Key: String] = [
@@ -394,6 +437,19 @@ enum L10n {
         .welcomeOpenFolder: "開啟資料夾開始閱讀",
         .welcomePressCmdO: "按 Cmd+O 或點擊工具列中的開啟按鈕",
         .selectFileHint: "選擇檔案以預覽",
+        .contextMenuNewFile: "新增檔案",
+        .contextMenuNewSubdirectory: "新增子目錄",
+        .contextMenuRename: "重新命名",
+        .contextMenuMoveTo: "移動到\u{2026}",
+        .contextMenuDelete: "移到垃圾桶",
+        .renameTitle: "重新命名",
+        .renameMessage: "輸入「{name}」的新名稱：",
+        .renameEmptyName: "名稱不能為空。",
+        .renameNameExists: "已存在同名項目。",
+        .deleteTitle: "移到垃圾桶",
+        .deleteMessage: "確定要將「{name}」移到垃圾桶嗎？",
+        .deleteDirectoryMessage: "確定要將「{name}」及其所有內容移到垃圾桶嗎？",
+        .moveSelectFolder: "選擇目標資料夾",
     ]
 
     // MARK: - 查找

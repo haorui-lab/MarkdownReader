@@ -233,7 +233,7 @@ final class DocumentViewModel {
         isDirty = false
         isUntitled = true
         fileError = nil
-        displayMode = settings.defaultDisplayMode
+        displayMode = .raw  // 新建文件始终使用 Raw 模式，便于立即开始编辑
 
         isLoading = false
 
@@ -373,5 +373,112 @@ final class DocumentViewModel {
         diskContentSnapshot.removeValue(forKey: url)
         isUntitled = false
         isDirty = false
+    }
+
+    // MARK: - 文件系统操作协调
+
+    /// 处理文件被重命名的场景，更新内部缓存和当前文件引用
+    /// - Parameters:
+    ///   - oldURL: 重命名前的 URL
+    ///   - newURL: 重命名后的 URL
+    func handleFileRenamed(from oldURL: URL, to newURL: URL) {
+        // 迁移缓存
+        if let cached = contentCache[oldURL] {
+            contentCache.removeValue(forKey: oldURL)
+            contentCache[newURL] = cached
+        }
+        if let snapshot = diskContentSnapshot[oldURL] {
+            diskContentSnapshot.removeValue(forKey: oldURL)
+            diskContentSnapshot[newURL] = snapshot
+        }
+        if let mode = displayModeCache[oldURL] {
+            displayModeCache.removeValue(forKey: oldURL)
+            displayModeCache[newURL] = mode
+        }
+
+        // 更新当前编辑的文件引用
+        if currentFileURL == oldURL {
+            currentFileURL = newURL
+            fileName = newURL.lastPathComponent
+        }
+    }
+
+    /// 处理文件被删除的场景，清理编辑状态
+    /// - Parameter url: 被删除文件的 URL
+    func handleFileDeleted(at url: URL) {
+        // 清理缓存
+        contentCache.removeValue(forKey: url)
+        diskContentSnapshot.removeValue(forKey: url)
+        displayModeCache.removeValue(forKey: url)
+
+        // 如果当前正在编辑被删除的文件，先保存再清理
+        if currentFileURL == url {
+            if isDirty {
+                // 有未保存修改：另存为临时文件保留内容
+                let tempURL = Self.untitledDirectory.appendingPathComponent(fileName)
+                try? content.write(to: tempURL, atomically: true, encoding: .utf8)
+                currentFileURL = tempURL
+                isUntitled = true
+                diskContentSnapshot[tempURL] = content
+                contentCache[tempURL] = content
+            } else {
+                // 无未保存修改：直接清理
+                deselectCurrentFile()
+            }
+        }
+    }
+
+    /// 处理文件被移动的场景，更新内部缓存和当前文件引用
+    /// - Parameters:
+    ///   - oldURL: 移动前的 URL
+    ///   - newURL: 移动后的 URL
+    func handleFileMoved(from oldURL: URL, to newURL: URL) {
+        // 迁移缓存（与重命名逻辑一致）
+        if let cached = contentCache[oldURL] {
+            contentCache.removeValue(forKey: oldURL)
+            contentCache[newURL] = cached
+        }
+        if let snapshot = diskContentSnapshot[oldURL] {
+            diskContentSnapshot.removeValue(forKey: oldURL)
+            diskContentSnapshot[newURL] = snapshot
+        }
+        if let mode = displayModeCache[oldURL] {
+            displayModeCache.removeValue(forKey: oldURL)
+            displayModeCache[newURL] = mode
+        }
+
+        // 更新当前编辑的文件引用
+        if currentFileURL == oldURL {
+            currentFileURL = newURL
+            fileName = newURL.lastPathComponent
+        }
+
+        // 如果当前编辑的文件在被移动的目录内，也更新引用
+        if let current = currentFileURL, current.path.hasPrefix(oldURL.path + "/") {
+            let relativePath = current.path.replacingOccurrences(of: oldURL.path, with: newURL.path)
+            let newCurrentURL = URL(fileURLWithPath: relativePath)
+            currentFileURL = newCurrentURL
+            fileName = newCurrentURL.lastPathComponent
+        }
+
+        // 迁移目录内所有子文件的缓存
+        let keysToMigrate = contentCache.keys.filter { $0.path.hasPrefix(oldURL.path + "/") }
+        for key in keysToMigrate {
+            let relativePath = key.path.replacingOccurrences(of: oldURL.path, with: newURL.path)
+            let newKey = URL(fileURLWithPath: relativePath)
+            contentCache[newKey] = contentCache.removeValue(forKey: key)
+        }
+        let snapshotKeysToMigrate = diskContentSnapshot.keys.filter { $0.path.hasPrefix(oldURL.path + "/") }
+        for key in snapshotKeysToMigrate {
+            let relativePath = key.path.replacingOccurrences(of: oldURL.path, with: newURL.path)
+            let newKey = URL(fileURLWithPath: relativePath)
+            diskContentSnapshot[newKey] = diskContentSnapshot.removeValue(forKey: key)
+        }
+        let modeKeysToMigrate = displayModeCache.keys.filter { $0.path.hasPrefix(oldURL.path + "/") }
+        for key in modeKeysToMigrate {
+            let relativePath = key.path.replacingOccurrences(of: oldURL.path, with: newURL.path)
+            let newKey = URL(fileURLWithPath: relativePath)
+            displayModeCache[newKey] = displayModeCache.removeValue(forKey: key)
+        }
     }
 }

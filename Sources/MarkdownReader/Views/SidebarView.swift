@@ -206,6 +206,7 @@ struct FileNodeRow: View {
     let fileTreeViewModel: FileTreeViewModel
     let documentViewModel: DocumentViewModel
     @Environment(\.themeColors) private var themeColors
+    @Environment(\.language) private var language
 
     /// 是否为当前选中项
     private var isSelected: Bool {
@@ -247,6 +248,7 @@ struct FileNodeRow: View {
                     }
             }
             .listRowBackground(selectionBackground)
+            .contextMenu { directoryContextMenu }
         } else {
             // 文件行使用 Button 确保可靠选中
             Button {
@@ -256,6 +258,71 @@ struct FileNodeRow: View {
             }
             .buttonStyle(.plain)
             .listRowBackground(selectionBackground)
+            .contextMenu { fileContextMenu }
+        }
+    }
+
+    // MARK: - 目录右键菜单
+
+    /// 目录的右键菜单：新建文档、新建子目录、重命名、移动到、删除
+    @ViewBuilder
+    private var directoryContextMenu: some View {
+        Button {
+            fileTreeViewModel.createNewFileInDirectory(node.path)
+        } label: {
+            Label(L10n.tr(.contextMenuNewFile, language: language), systemImage: "doc.badge.plus")
+        }
+        Button {
+            fileTreeViewModel.createSubdirectory(in: node.path)
+        } label: {
+            Label(L10n.tr(.contextMenuNewSubdirectory, language: language), systemImage: "folder.badge.plus")
+        }
+        Divider()
+        Button {
+            fileTreeViewModel.renameItem(node)
+        } label: {
+            Label(L10n.tr(.contextMenuRename, language: language), systemImage: "pencil")
+        }
+        Button {
+            fileTreeViewModel.moveItem(node)
+        } label: {
+            Label(L10n.tr(.contextMenuMoveTo, language: language), systemImage: "folder.and.arrow.down")
+        }
+        Divider()
+        Button {
+            fileTreeViewModel.deleteItem(node)
+        } label: {
+            Label(L10n.tr(.contextMenuDelete, language: language), systemImage: "trash")
+        }
+    }
+
+    // MARK: - 文件右键菜单
+
+    /// 文件的右键菜单：新建文档、重命名、移动到、删除（无「新建子目录」）
+    @ViewBuilder
+    private var fileContextMenu: some View {
+        Button {
+            // 在文件所在目录下新建文档
+            fileTreeViewModel.createNewFileInDirectory(node.path.deletingLastPathComponent())
+        } label: {
+            Label(L10n.tr(.contextMenuNewFile, language: language), systemImage: "doc.badge.plus")
+        }
+        Divider()
+        Button {
+            fileTreeViewModel.renameItem(node)
+        } label: {
+            Label(L10n.tr(.contextMenuRename, language: language), systemImage: "pencil")
+        }
+        Button {
+            fileTreeViewModel.moveItem(node)
+        } label: {
+            Label(L10n.tr(.contextMenuMoveTo, language: language), systemImage: "folder.and.arrow.down")
+        }
+        Divider()
+        Button {
+            fileTreeViewModel.deleteItem(node)
+        } label: {
+            Label(L10n.tr(.contextMenuDelete, language: language), systemImage: "trash")
         }
     }
 }

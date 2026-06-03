@@ -25,12 +25,18 @@ final class FileTreeViewModel {
     /// 是否为空目录（无 Markdown 文件）
     var isEmptyDirectory: Bool = false
 
+    /// 当前界面语言（右键菜单对话框使用）
+    var language: Language = .en
+
     // MARK: - 依赖
 
     private let fileService: FileService
 
     /// 设置模型（用于读取文件树过滤设置）
     var settings: SettingsModel
+
+    /// 文档视图模型（弱引用，用于协调重命名/删除/移动时的编辑状态）
+    weak var documentViewModel: DocumentViewModel?
 
     /// 文件系统监控器
     private let fileSystemWatcher = FileSystemWatcher()
@@ -302,5 +308,224 @@ final class FileTreeViewModel {
             }
         }
         return result
+    }
+
+    // MARK: - 右键菜单操作
+
+    /// 在指定目录下新建 Markdown 文件（右键菜单用，与工具栏逻辑一致）
+    /// - Parameter directory: 目标目录 URL
+    func createNewFileInDirectory(_ directory: URL) {
+        _ = createNewFile(in: directory)
+    }
+
+    /// 在指定目录下新建子目录
+    /// - Parameter parentDirectory: 父目录 URL
+    func createSubdirectory(in parentDirectory: URL) {
+        // 生成不重名的目录名
+        var dirName = "New Folder"
+        var dirURL = parentDirectory.appendingPathComponent(dirName)
+        var counter = 1
+        while FileManager.default.fileExists(atPath: dirURL.path) {
+            dirName = "New Folder \(counter)"
+            dirURL = parentDirectory.appendingPathComponent(dirName)
+            counter += 1
+        }
+
+        do {
+            try fileService.createDirectory(in: parentDirectory, name: dirName)
+            Task {
+                await refreshDirectory()
+                // 展开父目录以显示新建的子目录
+                expandedDirs.insert(parentDirectory)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 重命名文件或目录
+    /// - Parameter node: 要重命名的节点
+    func renameItem(_ node: FileNode) {
+        let alert = NSAlert()
+        alert.messageText = L10n.tr(.renameTitle, language: language)
+        alert.informativeText = L10n.tr(.renameMessage, language: language, args: ["name": node.name])
+        alert.alertStyle = .informational
+
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        textField.stringValue = node.name
+        // 如果是文件，选中不含扩展名的部分
+        if !node.isDirectory {
+            let nameWithoutExt = node.name.replacingOccurrences(
+                of: ".\(node.path.pathExtension)",
+                with: "",
+                options: .anchored
+            )
+            let extRange = NSRange(location: 0, length: nameWithoutExt.utf16.count)
+            // 延迟选中文件名（不含扩展名），确保文本框已准备好
+            DispatchQueue.main.async {
+                if let editor = textField.currentEditor() {
+                    editor.selectedRange = extRange
+                }
+            }
+        }
+        alert.accessoryView = textField
+
+        alert.addButton(withTitle: L10n.tr(.open, language: language))  // "打开/确认"
+        alert.addButton(withTitle: L10n.tr(.unsavedCancel, language: language))  // "取消"
+
+        alert.buttons[0].keyEquivalent = "\r"
+        alert.buttons[1].keyEquivalent = "\u{1b}"
+
+        // 确保 NSAlert 在前台
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+
+        guard response == .alertFirstButtonReturn else { return }
+
+        let newName = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !newName.isEmpty else {
+            showError(L10n.tr(.renameEmptyName, language: language))
+            return
+        }
+        guard newName != node.name else { return }
+
+        // 检查同名项是否已存在
+        let newURL = node.path.deletingLastPathComponent().appendingPathComponent(newName)
+        if FileManager.default.fileExists(atPath: newURL.path) {
+            showError(L10n.tr(.renameNameExists, language: language))
+            return
+        }
+
+        do {
+            let renamedURL = try fileService.renameItem(at: node.path, to: newName)
+            // 更新 DocumentViewModel 的引用
+            if let docVM = documentViewModel {
+                docVM.handleFileRenamed(from: node.path, to: renamedURL)
+            }
+            // 更新选中状态
+            if selectedFileURL == node.path {
+                selectedFileURL = renamedURL
+            }
+            // 更新展开状态
+            if node.isDirectory {
+                if expandedDirs.contains(node.path) {
+                    expandedDirs.remove(node.path)
+                    expandedDirs.insert(renamedURL)
+                }
+            }
+            Task {
+                await refreshDirectory()
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 删除文件或目录（移到废纸篓）
+    /// - Parameter node: 要删除的节点
+    func deleteItem(_ node: FileNode) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+
+        if node.isDirectory {
+            alert.messageText = L10n.tr(.deleteTitle, language: language)
+            alert.informativeText = L10n.tr(.deleteDirectoryMessage, language: language, args: ["name": node.name])
+        } else {
+            alert.messageText = L10n.tr(.deleteTitle, language: language)
+            alert.informativeText = L10n.tr(.deleteMessage, language: language, args: ["name": node.name])
+        }
+
+        alert.addButton(withTitle: L10n.tr(.contextMenuDelete, language: language))
+        alert.addButton(withTitle: L10n.tr(.unsavedCancel, language: language))
+
+        alert.buttons[0].keyEquivalent = "\r"
+        alert.buttons[1].keyEquivalent = "\u{1b}"
+
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+
+        guard response == .alertFirstButtonReturn else { return }
+
+        do {
+            // 如果删除的是当前正在编辑的文件，先保存或清理编辑状态
+            if let docVM = documentViewModel {
+                docVM.handleFileDeleted(at: node.path)
+            }
+            try fileService.trashItem(at: node.path)
+            // 清除选中状态
+            if selectedFileURL == node.path || (node.isDirectory && selectedFileURL?.path.hasPrefix(node.path.path + "/") == true) {
+                selectedFileURL = nil
+            }
+            // 清除展开状态
+            if node.isDirectory {
+                expandedDirs = expandedDirs.filter { !$0.path.hasPrefix(node.path.path + "/") && $0 != node.path }
+            }
+            Task {
+                await refreshDirectory()
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 移动文件或目录到其他位置
+    /// - Parameter node: 要移动的节点
+    func moveItem(_ node: FileNode) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = L10n.tr(.moveSelectFolder, language: language)
+        panel.directoryURL = rootDirectory
+
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+
+        // 不能移动到自身或自身子目录
+        if destination.path.hasPrefix(node.path.path) {
+            return
+        }
+        // 检查目标位置是否已存在同名项
+        let destinationPath = destination.appendingPathComponent(node.name)
+        if FileManager.default.fileExists(atPath: destinationPath.path) {
+            showError(L10n.tr(.renameNameExists, language: language))
+            return
+        }
+
+        do {
+            let movedURL = try fileService.moveItem(at: node.path, to: destination)
+            // 更新 DocumentViewModel 的引用
+            if let docVM = documentViewModel {
+                docVM.handleFileMoved(from: node.path, to: movedURL)
+            }
+            // 更新选中状态
+            if selectedFileURL == node.path {
+                selectedFileURL = movedURL
+            }
+            // 清理展开状态中的旧路径
+            if node.isDirectory {
+                let oldExpanded = expandedDirs.filter { $0.path.hasPrefix(node.path.path) }
+                for oldURL in oldExpanded {
+                    expandedDirs.remove(oldURL)
+                    let relativePath = oldURL.path.replacingOccurrences(of: node.path.path, with: movedURL.path)
+                    expandedDirs.insert(URL(fileURLWithPath: relativePath))
+                }
+            }
+            Task {
+                await refreshDirectory()
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 显示错误提示
+    private func showError(_ message: String) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 }

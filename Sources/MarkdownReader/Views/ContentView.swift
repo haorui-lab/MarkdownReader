@@ -56,6 +56,8 @@ struct ContentView: View {
             .background(TrafficLightHider(bgColor: themeColors.bgSubtle))
             .background(WindowCloseGuard(documentViewModel: documentViewModel, settings: settings))
             .task {
+                // 连接 FileTreeViewModel 与 DocumentViewModel
+                fileTreeViewModel.documentViewModel = documentViewModel
                 applyAppearance(settings.appearanceMode)
                 if settings.reopenLastLocation {
                     restoreLastLocation()
@@ -332,7 +334,16 @@ private struct FileOpenModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .openDirectory)) { notification in
-                if let url = notification.object as? URL {
+                guard let url = notification.object as? URL else { return }
+                if documentViewModel.isUntitled && documentViewModel.isDirty {
+                    handleUnsavedChangesBeforeAction { proceed in
+                        guard proceed else { return }
+                        appViewModel.openDirectory(url)
+                        settings.lastOpenedDirectory = url
+                        settings.lastOpenedFile = nil
+                        settings.addRecentItem(url: url, isDirectory: true)
+                    }
+                } else {
                     appViewModel.openDirectory(url)
                     settings.lastOpenedDirectory = url
                     settings.lastOpenedFile = nil
@@ -340,7 +351,20 @@ private struct FileOpenModifier: ViewModifier {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .openFile)) { notification in
-                if let url = notification.object as? URL {
+                guard let url = notification.object as? URL else { return }
+                if documentViewModel.isUntitled && documentViewModel.isDirty {
+                    handleUnsavedChangesBeforeAction { proceed in
+                        guard proceed else { return }
+                        appViewModel.openSingleFile(url)
+                        fileTreeViewModel.selectedFileURL = url
+                        settings.lastOpenedDirectory = nil
+                        settings.lastOpenedFile = url
+                        settings.addRecentItem(url: url, isDirectory: false)
+                        Task {
+                            await documentViewModel.loadFile(at: url)
+                        }
+                    }
+                } else {
                     appViewModel.openSingleFile(url)
                     fileTreeViewModel.selectedFileURL = url
                     settings.lastOpenedDirectory = nil
@@ -352,15 +376,34 @@ private struct FileOpenModifier: ViewModifier {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .openPanel)) { _ in
-                OpenPanelHelper.show(language: settings.languagePref.resolvedLanguage)
+                if documentViewModel.isUntitled && documentViewModel.isDirty {
+                    handleUnsavedChangesBeforeAction { proceed in
+                        guard proceed else { return }
+                        OpenPanelHelper.show(language: settings.languagePref.resolvedLanguage)
+                    }
+                } else {
+                    OpenPanelHelper.show(language: settings.languagePref.resolvedLanguage)
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .newFile)) { _ in
-                let result = documentViewModel.createUntitledFile()
-                guard result != nil else { return }
-                fileTreeViewModel.selectedFileURL = nil
-                appViewModel.selectedFile = nil
-                appViewModel.hasUnsavedUntitled = true
-                appViewModel.untitledFileName = documentViewModel.fileName
+                if documentViewModel.isUntitled && documentViewModel.isDirty {
+                    handleUnsavedChangesBeforeAction { proceed in
+                        guard proceed else { return }
+                        let result = documentViewModel.createUntitledFile()
+                        guard result != nil else { return }
+                        fileTreeViewModel.selectedFileURL = nil
+                        appViewModel.selectedFile = nil
+                        appViewModel.hasUnsavedUntitled = true
+                        appViewModel.untitledFileName = documentViewModel.fileName
+                    }
+                } else {
+                    let result = documentViewModel.createUntitledFile()
+                    guard result != nil else { return }
+                    fileTreeViewModel.selectedFileURL = nil
+                    appViewModel.selectedFile = nil
+                    appViewModel.hasUnsavedUntitled = true
+                    appViewModel.untitledFileName = documentViewModel.fileName
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in
                 Task {
@@ -393,6 +436,72 @@ private struct FileOpenModifier: ViewModifier {
                     }
                 }
             }
+    }
+
+    /// 通用未保存修改弹窗处理
+    /// 仅在临时新建文件（isUntitled && isDirty）有未保存更改时调用
+    /// 弹窗确认后执行操作，保护临时文件内容不丢失
+    /// - Parameter completion: 回调，`proceed` 为 true 表示用户选择保存或放弃，可继续操作；false 表示取消
+    private func handleUnsavedChangesBeforeAction(completion: @escaping (_ proceed: Bool) -> Void) {
+        let language = settings.languagePref.resolvedLanguage
+
+        let alert = NSAlert()
+        alert.messageText = L10n.tr(.unsavedChangesTitle, language: language)
+        alert.informativeText = L10n.tr(.unsavedChangesMessage, language: language)
+        alert.alertStyle = .warning
+
+        alert.addButton(withTitle: L10n.tr(.unsavedSave, language: language))
+        alert.addButton(withTitle: L10n.tr(.unsavedDontSave, language: language))
+        alert.addButton(withTitle: L10n.tr(.unsavedCancel, language: language))
+
+        alert.buttons[0].keyEquivalent = "\r"
+        alert.buttons[1].keyEquivalent = "d"
+        alert.buttons[1].keyEquivalentModifierMask = .command
+        alert.buttons[2].keyEquivalent = "\u{1b}"
+
+        let response = alert.runModal()
+
+        switch response {
+        case .alertFirstButtonReturn:
+            // 保存：临时新建文件走另存为流程
+            let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
+            let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
+
+            if let saveURL = OpenPanelHelper.showSavePanel(
+                language: language,
+                defaultDirectory: defaultDir,
+                suggestedName: suggestedName
+            ) {
+                Task {
+                    await documentViewModel.saveAs(to: saveURL)
+                    appViewModel.hasUnsavedUntitled = false
+
+                    // 如果保存在当前目录下，刷新文件树
+                    if let rootDir = appViewModel.rootDirectory,
+                       saveURL.path.hasPrefix(rootDir.path + "/") {
+                        await fileTreeViewModel.loadDirectory(rootDir)
+                        fileTreeViewModel.selectedFileURL = saveURL
+                    }
+
+                    settings.lastOpenedFile = saveURL
+                    settings.addRecentItem(url: saveURL, isDirectory: false)
+                    completion(true)
+                }
+            } else {
+                // 用户取消了另存为，不继续操作
+                completion(false)
+            }
+
+        case .alertSecondButtonReturn:
+            // 不保存
+            documentViewModel.discardUntitledFile()
+            appViewModel.hasUnsavedUntitled = false
+            completion(true)
+
+        default:
+            // 取消
+            completion(false)
+        }
     }
 }
 
@@ -431,7 +540,7 @@ private struct SelectionChangeModifier: ViewModifier {
         content
             .onChange(of: fileTreeViewModel.selectedFileURL) { oldURL, newURL in
                 if let url = newURL {
-                    if documentViewModel.isUntitled || documentViewModel.isDirty {
+                    if documentViewModel.isUntitled && documentViewModel.isDirty {
                         handleFileSwitchWithUnsavedChanges(from: oldURL, to: url)
                     } else {
                         Task {
@@ -445,14 +554,18 @@ private struct SelectionChangeModifier: ViewModifier {
                        !FileManager.default.fileExists(atPath: deletedURL.path),
                        documentViewModel.isDirty {
                         handleDeletedFileWithUnsavedChanges(deletedURL)
-                    } else {
+                    } else if !documentViewModel.isUntitled {
+                        // 仅在非 untitled 文件时取消选中
+                        // untitled 文件不在文件树中，selectedFileURL 变为 nil 是正常的，
+                        // 不应重置文档状态
                         documentViewModel.deselectCurrentFile()
-                        appViewModel.selectedFile = nil
                     }
+                    appViewModel.selectedFile = nil
                 }
             }
     }
 
+    /// 文件切换时的未保存修改弹窗（仅临时新建文件触发）
     private func handleFileSwitchWithUnsavedChanges(from oldURL: URL?, to newURL: URL) {
         guard documentViewModel.currentFileURL != newURL else { return }
 
@@ -476,42 +589,30 @@ private struct SelectionChangeModifier: ViewModifier {
 
         switch response {
         case .alertFirstButtonReturn:
-            if documentViewModel.isUntitled {
-                let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
-                let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
+            // 保存：临时新建文件走另存为流程
+            let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
+            let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
 
-                if let saveURL = OpenPanelHelper.showSavePanel(
-                    language: language,
-                    defaultDirectory: defaultDir,
-                    suggestedName: suggestedName
-                ) {
-                    Task {
-                        await documentViewModel.saveAs(to: saveURL)
-                        appViewModel.hasUnsavedUntitled = false
-                        await documentViewModel.loadFile(at: newURL)
-                        let node = findFileNode(in: fileTreeViewModel.nodes, url: newURL)
-                        appViewModel.selectedFile = node
+            if let saveURL = OpenPanelHelper.showSavePanel(
+                language: language,
+                defaultDirectory: defaultDir,
+                suggestedName: suggestedName
+            ) {
+                Task {
+                    await documentViewModel.saveAs(to: saveURL)
+                    appViewModel.hasUnsavedUntitled = false
+                    await documentViewModel.loadFile(at: newURL)
+                    let node = findFileNode(in: fileTreeViewModel.nodes, url: newURL)
+                    appViewModel.selectedFile = node
 
-                        if let rootDir = appViewModel.rootDirectory,
-                           saveURL.path.hasPrefix(rootDir.path + "/") {
-                            await fileTreeViewModel.loadDirectory(rootDir)
-                            fileTreeViewModel.selectedFileURL = saveURL
-                        }
+                    if let rootDir = appViewModel.rootDirectory,
+                       saveURL.path.hasPrefix(rootDir.path + "/") {
+                        await fileTreeViewModel.loadDirectory(rootDir)
+                        fileTreeViewModel.selectedFileURL = saveURL
                     }
-                } else {
-                    fileTreeViewModel.selectedFileURL = oldURL
                 }
             } else {
-                Task {
-                    let success = await documentViewModel.save()
-                    if success {
-                        await documentViewModel.loadFile(at: newURL)
-                        let node = findFileNode(in: fileTreeViewModel.nodes, url: newURL)
-                        appViewModel.selectedFile = node
-                    } else {
-                        fileTreeViewModel.selectedFileURL = oldURL
-                    }
-                }
+                fileTreeViewModel.selectedFileURL = oldURL
             }
 
         case .alertSecondButtonReturn:
@@ -607,6 +708,9 @@ private struct SettingsChangeModifier: ViewModifier {
         content
             .onChange(of: settings.showHiddenFiles) { _, _ in reloadFileTree() }
             .onChange(of: settings.showNonMarkdownFiles) { _, _ in reloadFileTree() }
+            .onChange(of: settings.languagePref.resolvedLanguage) { _, newLanguage in
+                fileTreeViewModel.language = newLanguage
+            }
     }
 
     private func reloadFileTree() {
@@ -713,8 +817,9 @@ private struct WindowCloseGuard: NSViewRepresentable {
         func windowShouldClose(_ sender: NSWindow) -> Bool {
             guard let doc = documentViewModel else { return true }
 
-            // 没有未保存的更改，直接关闭
-            if !doc.hasAnyDirtyFile { return true }
+            // 仅对临时新建文件且有未保存更改时弹窗提醒
+            // 普通脏文件（已保存在磁盘）允许自由关闭，不弹窗
+            if !(doc.isUntitled && doc.isDirty) { return true }
 
             let language = settings?.languagePref.resolvedLanguage ?? .en
 
@@ -740,38 +845,27 @@ private struct WindowCloseGuard: NSViewRepresentable {
 
             switch response {
             case .alertFirstButtonReturn:
-                // 保存
-                if doc.isUntitled {
-                    // 未保存的新建文件，先另存为
-                    let defaultDir = settings?.lastOpenedDirectory ?? settings?.lastOpenedFile?.deletingLastPathComponent()
-                    let suggestedName = doc.fileName.isEmpty ? "Untitled.md" : doc.fileName
+                // 保存：临时新建文件走另存为流程
+                let defaultDir = settings?.lastOpenedDirectory ?? settings?.lastOpenedFile?.deletingLastPathComponent()
+                let suggestedName = doc.fileName.isEmpty ? "Untitled.md" : doc.fileName
 
-                    if let saveURL = OpenPanelHelper.showSavePanel(
-                        language: language,
-                        defaultDirectory: defaultDir,
-                        suggestedName: suggestedName
-                    ) {
-                        Task {
-                            await doc.saveAs(to: saveURL)
-                            // 保存成功后关闭窗口
-                            sender.close()
-                        }
-                    }
-                    // 用户取消了另存为，不关闭窗口
-                    return false
-                } else {
+                if let saveURL = OpenPanelHelper.showSavePanel(
+                    language: language,
+                    defaultDirectory: defaultDir,
+                    suggestedName: suggestedName
+                ) {
                     Task {
-                        let success = await doc.save()
-                        if success {
-                            sender.close()
-                        }
+                        await doc.saveAs(to: saveURL)
+                        // 保存成功后关闭窗口
+                        sender.close()
                     }
-                    return false
                 }
+                // 用户取消了另存为，不关闭窗口
+                return false
 
             case .alertSecondButtonReturn:
                 // 不保存，清理临时文件后关闭
-                if doc.isUntitled, let url = doc.currentFileURL {
+                if let url = doc.currentFileURL {
                     try? FileManager.default.removeItem(at: url)
                 }
                 return true
