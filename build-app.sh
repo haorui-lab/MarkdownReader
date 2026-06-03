@@ -30,7 +30,7 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-echo "🔨 构建 ${APP_NAME} (${CONFIG})..."
+echo "🔨 构建 ${APP_NAME} (${CONFIG}, arm64)..."
 swift build -c "$CONFIG"
 
 BUILD_DIR="${PROJECT_DIR}/.build/arm64-apple-macosx/${CONFIG}"

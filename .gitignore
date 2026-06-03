@@ -30,6 +30,7 @@ xcuserdata/
 
 # Build output
 *.app
+*.dmg
 
 # CocoaPods
 Pods/
