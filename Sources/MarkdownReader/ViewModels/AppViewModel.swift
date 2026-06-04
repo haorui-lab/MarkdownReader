@@ -175,10 +175,14 @@ final class AppViewModel {
 
     /// 打开单个文件（单文件模式，Sidebar 默认隐藏但可手动打开）
     func openSingleFile(_ url: URL) {
-        rootDirectory = nil
+        // 先设置单文件模式属性，再清空 rootDirectory
+        // 因为 rootDirectory 的 didSet 会调用 updateWindowTitle()
+        // 如果先清空 rootDirectory，此时 isSingleFileMode/singleFileURL 尚未设置
+        // 会导致窗口标题无法正确显示文件名
         isSingleFileMode = true
         singleFileURL = url
         selectedFile = nil
+        rootDirectory = nil
         if isSidebarVisible {
             withAnimation(.spring(duration: 0.25)) {
                 isSidebarVisible = false

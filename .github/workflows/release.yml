@@ -118,9 +118,11 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           DMG_NAME="${{ env.PRODUCT_NAME }}-$VERSION.dmg"
+          rm -f "$DMG_NAME"
 
           create-dmg \
             --volname "${{ env.PRODUCT_NAME }} $VERSION" \
+            --volicon "${{ env.PRODUCT_NAME }}.app/Contents/Resources/AppIcon.icns" \
             --window-pos 200 120 \
             --window-size 600 400 \
             --icon-size 100 \
@@ -128,6 +130,12 @@ jobs:
             --app-drop-link 425 190 \
             "$DMG_NAME" \
             "${{ env.PRODUCT_NAME }}.app"
+
+          VOLICON="${{ env.PRODUCT_NAME }}.app/Contents/Resources/AppIcon.icns"
+          if [ -f "$VOLICON" ]; then
+            swiftc scripts/seticon.swift -o /tmp/seticon
+            /tmp/seticon "$VOLICON" "$DMG_NAME"
+          fi
 
           echo "✅ DMG created: $DMG_NAME"
           echo "dmg_name=$DMG_NAME" >> "$GITHUB_ENV"

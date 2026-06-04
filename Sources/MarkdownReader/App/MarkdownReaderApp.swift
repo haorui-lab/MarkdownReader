@@ -74,23 +74,22 @@ struct MarkdownReaderApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                // 处理从 Finder 双击或右键「用 Markdown Reader 打开」的文件
-                // 热启动时与 AppDelegate 配合，通过 isURLAlreadyHandled 去重防止双重打开
+                // .onOpenURL 在 macOS 15+ 不触发 file-open 事件
+                // 保留作为安全网，以防未来 macOS 版本行为变化
                 .onOpenURL { url in
-                    // 跳过已被 AppDelegate 处理的 URL
-                    if let appDelegate = NSApp.delegate as? AppDelegate,
-                       appDelegate.isURLAlreadyHandled(url) { return }
-
                     var isDir: ObjCBool = false
                     FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
-
-                    if isDir.boolValue {
-                        NotificationCenter.default.post(name: .openDirectory, object: url)
-                    } else {
-                        NotificationCenter.default.post(name: .openFile, object: url)
+                    let name: Notification.Name = isDir.boolValue ? .openDirectory : .openFile
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: name, object: url)
                     }
                 }
+                // 热启动时路由到现有窗口，而非创建新窗口
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
+        // .handlesExternalEvents(matching:) scene modifier: 冷启动时告诉 SwiftUI
+        // 为外部事件（如 Finder 双击打开文件）创建新窗口
+        .handlesExternalEvents(matching: ["*"])
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 900, height: 600)
         .windowResizability(.automatic)
@@ -162,4 +161,5 @@ extension Notification.Name {
     static let saveAsFile = Notification.Name("com.markdownreader.saveAsFile")
     static let reloadFile = Notification.Name("com.markdownreader.reloadFile")
     static let clearRecentItems = Notification.Name("com.markdownreader.clearRecentItems")
+    static let restoreLastLocation = Notification.Name("com.markdownreader.restoreLastLocation")
 }

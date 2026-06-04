@@ -59,12 +59,34 @@ struct ContentView: View {
                 // 连接 FileTreeViewModel 与 DocumentViewModel
                 fileTreeViewModel.documentViewModel = documentViewModel
                 applyAppearance(settings.appearanceMode)
-                // 如果应用是通过双击文件启动的，优先打开该文件，不恢复上次位置
-                // 文件打开由 AppDelegate.applicationDidFinishLaunching 发送的通知处理
-                if let appDelegate = NSApp.delegate as? AppDelegate,
-                   appDelegate.pendingOpenFileURL != nil {
-                    // 跳过恢复上次位置
-                } else if settings.reopenLastLocation {
+
+                // 检查 UserDefaults 中是否有待打开的文件（从 AppDelegate 写入）
+                // 这是最可靠的后备机制：即使通知丢失（无窗口时），视图挂载后也能读取
+                if let filePath = UserDefaults.standard.string(forKey: "pendingOpenFilePath") {
+                    UserDefaults.standard.removeObject(forKey: "pendingOpenFilePath")
+                    let url = URL(fileURLWithPath: filePath)
+                    appViewModel.openSingleFile(url)
+                    fileTreeViewModel.selectedFileURL = url
+                    settings.lastOpenedDirectory = nil
+                    settings.lastOpenedFile = url
+                    settings.addRecentItem(url: url, isDirectory: false)
+                    Task {
+                        await documentViewModel.loadFile(at: url)
+                    }
+                } else if let dirPath = UserDefaults.standard.string(forKey: "pendingOpenDirectoryPath") {
+                    UserDefaults.standard.removeObject(forKey: "pendingOpenDirectoryPath")
+                    let url = URL(fileURLWithPath: dirPath)
+                    appViewModel.openDirectory(url)
+                    settings.lastOpenedDirectory = url
+                    settings.lastOpenedFile = nil
+                    settings.addRecentItem(url: url, isDirectory: true)
+                }
+                // 不在此处调用 restoreLastLocation()
+                // 冷启动时，applicationDidFinishLaunching 通过 .restoreLastLocation 通知处理
+                // 这样可以确保通知在视图完全挂载后才发送，避免时序问题
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .restoreLastLocation)) { _ in
+                if settings.reopenLastLocation {
                     restoreLastLocation()
                 }
             }
@@ -340,6 +362,8 @@ private struct FileOpenModifier: ViewModifier {
         content
             .onReceive(NotificationCenter.default.publisher(for: .openDirectory)) { notification in
                 guard let url = notification.object as? URL else { return }
+                // 幂等保护：如果已经在显示此目录，跳过
+                if appViewModel.rootDirectory == url { return }
                 if documentViewModel.isUntitled && documentViewModel.isDirty {
                     handleUnsavedChangesBeforeAction { proceed in
                         guard proceed else { return }
@@ -357,6 +381,8 @@ private struct FileOpenModifier: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: .openFile)) { notification in
                 guard let url = notification.object as? URL else { return }
+                // 幂等保护：如果已经在显示此文件，跳过（防止 application(_:open:) 和 .onOpenURL 同时触发导致重复打开）
+                if documentViewModel.currentFileURL == url { return }
                 if documentViewModel.isUntitled && documentViewModel.isDirty {
                     handleUnsavedChangesBeforeAction { proceed in
                         guard proceed else { return }
