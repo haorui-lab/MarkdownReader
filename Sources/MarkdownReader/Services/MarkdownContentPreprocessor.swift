@@ -5,7 +5,6 @@ import Foundation
 /// 在传给 Textual StructuredText 渲染之前，对 Markdown 源码进行预处理，
 /// 解决 Foundation Markdown 解析器的已知限制。
 enum MarkdownContentPreprocessor {
-    /// 对 Markdown 内容执行全部预处理步骤
     static func preprocess(_ content: String) -> String {
         var result = content
         result = stripYAMLFrontMatter(result)
@@ -16,18 +15,39 @@ enum MarkdownContentPreprocessor {
         return result
     }
 
-    /// 转换链接图片：`[![alt](img_url)](link_url "title")` → `![alt](img_url)`
+    /// 转换链接图片：`[![alt](img_url)](link_url "title")` → `![alt](img_url#mr-link=link_url)`
     ///
     /// Foundation 的 `AttributedString(markdown:)` 解析器在处理嵌套链接图片时，
     /// 只保留外层 `link` 属性，内层 `imageURL` 被丢弃。
+    /// 将 link_url 编码到 img_url 的 fragment 中（`#mr-link=` 前缀），
+    /// ImageAttachmentLoader 会提取 fragment 恢复链接点击功能。
     static func convertLinkedImages(_ content: String) -> String {
         let pattern = #"\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)\s]+)(?:\s+"[^"]*")?\)"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return content }
         let range = NSRange(content.startIndex..., in: content)
-        return regex.stringByReplacingMatches(in: content, range: range, withTemplate: "![$1]($2)")
+
+        var result = content
+        let matches = regex.matches(in: result, range: range)
+
+        for match in matches.reversed() {
+            guard let altRange = Range(match.range(at: 1), in: result),
+                  let imgURLRange = Range(match.range(at: 2), in: result),
+                  let linkURLRange = Range(match.range(at: 3), in: result),
+                  let fullRange = Range(match.range, in: result) else { continue }
+
+            let alt = String(result[altRange])
+            let imgURL = String(result[imgURLRange])
+            let linkURL = String(result[linkURLRange])
+
+            let encodedLink = linkURL.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? linkURL
+            let replacement = "![\(alt)](\(imgURL)#mr-link=\(encodedLink))"
+
+            result.replaceSubrange(fullRange, with: replacement)
+        }
+
+        return result
     }
 
-    /// 剥离 YAML Front Matter（`---` 包裹的头部）
     static func stripYAMLFrontMatter(_ content: String) -> String {
         let pattern = #"^---\s*\n[\s\S]*?\n---\s*\n"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return content }
@@ -35,7 +55,6 @@ enum MarkdownContentPreprocessor {
         return regex.stringByReplacingMatches(in: content, options: [], range: range, withTemplate: "")
     }
 
-    /// 转换 HTML img 标签：`<img src="url" alt="text">` → `![text](url)`
     static func convertHTMLImageTags(_ content: String) -> String {
         let pattern = #"<img\s+[^>]*src=["']([^"']+)["'][^>]*(?:alt=["']([^"']*)["'])?[^>]*\/?>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
@@ -45,7 +64,6 @@ enum MarkdownContentPreprocessor {
         return regex.stringByReplacingMatches(in: content, options: [], range: range, withTemplate: "![$2]($1)")
     }
 
-    /// 转换 HTML a 标签：`<a href="url">text</a>` → `[text](url)`
     static func convertHTMLAnchorTags(_ content: String) -> String {
         let pattern = #"<a\s+[^>]*href=["']([^"']+)["'][^>]*>([^<]*)<\/a>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
@@ -55,14 +73,7 @@ enum MarkdownContentPreprocessor {
         return regex.stringByReplacingMatches(in: content, options: [], range: range, withTemplate: "[$2]($1)")
     }
 
-    /// 转换 HTML sup/sub 标签为 PUA 标记字符
-    ///
-    /// Foundation Markdown 不支持 `<sup>`/`<sub>`，将其替换为 Unicode PUA 字符，
-    /// 供 SupSubMarkupParser 后处理时识别并应用格式。
-    ///
-    /// 标记映射（与 SupSubMarkupParser 保持同步）：
-    /// - `<sup>...</sup>` → U+E000...U+E001
-    /// - `<sub>...</sub>` → U+E002...U+E003
+    /// 转换 HTML sup/sub 标签为 PUA 标记字符（与 SupSubMarkupParser 配合）
     static func convertHTMLSupSubTags(_ content: String) -> String {
         var result = content
 

@@ -163,6 +163,29 @@ struct MarkdownReaderApp: App {
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
             }
+
+            // 查找菜单
+            CommandMenu(L10n.tr(.findBarFind, language: language)) {
+                Button(L10n.tr(.findBarFind, language: language) + "\u{2026}") {
+                    NotificationCenter.default.post(name: .findInDocument, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+
+                Button(L10n.tr(.findBarFindNext, language: language)) {
+                    NotificationCenter.default.post(name: .findNext, object: nil)
+                }
+                .keyboardShortcut("g", modifiers: .command)
+
+                Button(L10n.tr(.findBarFindPrevious, language: language)) {
+                    NotificationCenter.default.post(name: .findPrevious, object: nil)
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+
+                Button(L10n.tr(.findBarFindAndReplace, language: language) + "\u{2026}") {
+                    NotificationCenter.default.post(name: .findAndReplace, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .option])
+            }
         }
     }
 }
@@ -184,4 +207,8 @@ extension Notification.Name {
     static let restoreLastLocation = Notification.Name("com.markdownreader.restoreLastLocation")
     static let resetToWelcome = Notification.Name("com.markdownreader.resetToWelcome")
     static let checkForUpdates = Notification.Name("com.markdownreader.checkForUpdates")
+    static let findInDocument = Notification.Name("com.markdownreader.findInDocument")
+    static let findNext = Notification.Name("com.markdownreader.findNext")
+    static let findPrevious = Notification.Name("com.markdownreader.findPrevious")
+    static let findAndReplace = Notification.Name("com.markdownreader.findAndReplace")
 }

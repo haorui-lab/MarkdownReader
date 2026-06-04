@@ -95,6 +95,7 @@ struct RenderedMarkdownView: View, Equatable {
                 StructuredText(content, parser: SupSubMarkupParser(baseURL: fileURL?.deletingLastPathComponent()))
                     .textual.structuredTextStyle(.gitHub)
                     .textual.textSelection(.enabled)
+                    .textual.imageAttachmentLoader(ImageAttachmentLoader(baseURL: fileURL?.deletingLastPathComponent()))
                     .padding(contentPadding)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

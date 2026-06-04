@@ -10,6 +10,8 @@ struct RawMarkdownView: View {
     var fileURL: URL?
     /// 是否处于活跃状态（Raw 模式），用于自动获取焦点
     var isActive: Bool = false
+    var isFindBarVisible: Bool = false
+    var searchRef: TextViewSearchRef?
     @Environment(\.themeColors) private var themeColors
 
     var body: some View {
@@ -20,7 +22,9 @@ struct RawMarkdownView: View {
             scrollToLine: scrollToLine,
             themeColors: themeColors,
             fileURL: fileURL,
-            isActive: isActive
+            isActive: isActive,
+            searchRef: searchRef,
+            isFindBarVisible: isFindBarVisible
         )
         .background(themeColors.surface)
     }

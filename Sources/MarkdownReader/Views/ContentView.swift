@@ -530,6 +530,10 @@ private struct DirectoryChangeModifier: ViewModifier {
         content
             .onChange(of: appViewModel.rootDirectory) { _, newDirectory in
                 if let dir = newDirectory {
+                    // 清除选中状态，避免旧选中 URL 与新目录状态不同步
+                    // （例如：从单文件模式切到目录模式时，selectedFileURL 仍指向旧文件，
+                    // 但 documentViewModel 已被清空，导致点击同一文件不触发 onChange）
+                    fileTreeViewModel.selectedFileURL = nil
                     documentViewModel.clearDocument()
                     Task {
                         await fileTreeViewModel.loadDirectory(dir)

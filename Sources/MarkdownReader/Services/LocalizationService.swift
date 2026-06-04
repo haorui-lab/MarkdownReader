@@ -184,6 +184,20 @@ enum L10n {
         case updateModeAuto
         case updateModeManual
         case checkForUpdates
+
+        // 查找替换
+        case findBarSearchPlaceholder
+        case findBarReplacePlaceholder
+        case findBarFindNext
+        case findBarFindPrevious
+        case findBarReplace
+        case findBarReplaceAll
+        case findBarNoResults
+        case findBarCaseSensitive
+        case findBarWholeWord
+        case findBarRegularExpression
+        case findBarFind
+        case findBarFindAndReplace
     }
 
     // MARK: - 翻译字典
@@ -310,6 +324,18 @@ enum L10n {
         .updateModeAuto: "Auto install & restart",
         .updateModeManual: "Manual install required",
         .checkForUpdates: "Check for Updates\u{2026}",
+        .findBarSearchPlaceholder: "Search",
+        .findBarReplacePlaceholder: "Replace",
+        .findBarFindNext: "Find Next",
+        .findBarFindPrevious: "Find Previous",
+        .findBarReplace: "Replace",
+        .findBarReplaceAll: "Replace All",
+        .findBarNoResults: "No results",
+        .findBarCaseSensitive: "Match Case",
+        .findBarWholeWord: "Match Whole Word",
+        .findBarRegularExpression: "Use Regular Expression",
+        .findBarFind: "Find",
+        .findBarFindAndReplace: "Find and Replace",
     ]
 
     private static let zhCN: [Key: String] = [
@@ -434,6 +460,18 @@ enum L10n {
         .updateModeAuto: "自动安装并重启",
         .updateModeManual: "需手动安装",
         .checkForUpdates: "检查更新\u{2026}",
+        .findBarSearchPlaceholder: "搜索",
+        .findBarReplacePlaceholder: "替换",
+        .findBarFindNext: "查找下一个",
+        .findBarFindPrevious: "查找上一个",
+        .findBarReplace: "替换",
+        .findBarReplaceAll: "全部替换",
+        .findBarNoResults: "无结果",
+        .findBarCaseSensitive: "区分大小写",
+        .findBarWholeWord: "全词匹配",
+        .findBarRegularExpression: "使用正则表达式",
+        .findBarFind: "查找",
+        .findBarFindAndReplace: "查找和替换",
     ]
 
     private static let zhTW: [Key: String] = [
@@ -558,6 +596,18 @@ enum L10n {
         .updateModeAuto: "自動安裝並重新啟動",
         .updateModeManual: "需手動安裝",
         .checkForUpdates: "檢查更新\u{2026}",
+        .findBarSearchPlaceholder: "搜尋",
+        .findBarReplacePlaceholder: "取代",
+        .findBarFindNext: "尋找下一個",
+        .findBarFindPrevious: "尋找上一個",
+        .findBarReplace: "取代",
+        .findBarReplaceAll: "全部取代",
+        .findBarNoResults: "無結果",
+        .findBarCaseSensitive: "區分大小寫",
+        .findBarWholeWord: "全字匹配",
+        .findBarRegularExpression: "使用規則表達式",
+        .findBarFind: "尋找",
+        .findBarFindAndReplace: "尋找和取代",
     ]
 
     // MARK: - 查找

@@ -37,6 +37,12 @@ struct DetailView: View {
     /// Markdown 内容区 NSScrollView 引用，用于大纲导航滚动
     @State private var markdownScrollViewRef = MarkdownScrollViewRef()
 
+    /// 查找替换 ViewModel
+    @State private var findReplaceViewModel = FindReplaceViewModel()
+
+    /// NSTextView 搜索引用，用于 Raw 模式搜索/高亮/替换
+    @State private var textViewSearchRef = TextViewSearchRef()
+
     /// 刷新确认弹窗状态
     @State private var showReloadAlert = false
     @State private var dontRemindAgain = false
@@ -299,6 +305,104 @@ struct DetailView: View {
         )
     }
 
+    // MARK: - 查找替换
+
+    private func openFindBar() {
+        if !appViewModel.isFindBarVisible {
+            appViewModel.showFindBar()
+        }
+    }
+
+    private func openFindAndReplace() {
+        if !appViewModel.isFindBarVisible {
+            appViewModel.showFindBar()
+        }
+        findReplaceViewModel.expandReplace()
+    }
+
+    private func closeFindBar() {
+        textViewSearchRef.clearSearchHighlights()
+        findReplaceViewModel.clearSearch()
+        appViewModel.hideFindBar()
+    }
+
+    private func performSearch() {
+        let text = documentViewModel.content
+        findReplaceViewModel.performSearch(in: text)
+
+        if documentViewModel.displayMode == .raw {
+            if findReplaceViewModel.hasResults {
+                textViewSearchRef.reapplySearchHighlights(
+                    matchRanges: findReplaceViewModel.matchRanges,
+                    currentIndex: findReplaceViewModel.currentMatchIndex
+                )
+                textViewSearchRef.selectMatch(
+                    at: findReplaceViewModel.currentMatchIndex,
+                    in: findReplaceViewModel.matchRanges
+                )
+            } else {
+                textViewSearchRef.clearSearchHighlights()
+            }
+        } else if findReplaceViewModel.hasResults {
+            if let line = findReplaceViewModel.currentMatchLine {
+                documentViewModel.requestScrollToLine(line)
+            }
+        }
+    }
+
+    private func performFindNext() {
+        guard findReplaceViewModel.hasResults else {
+            if !appViewModel.isFindBarVisible { openFindBar() }
+            performSearch()
+            return
+        }
+        findReplaceViewModel.goToNextMatch()
+        navigateToCurrentMatch()
+    }
+
+    private func performFindPrevious() {
+        guard findReplaceViewModel.hasResults else {
+            if !appViewModel.isFindBarVisible { openFindBar() }
+            performSearch()
+            return
+        }
+        findReplaceViewModel.goToPreviousMatch()
+        navigateToCurrentMatch()
+    }
+
+    private func navigateToCurrentMatch() {
+        if documentViewModel.displayMode == .raw {
+            textViewSearchRef.reapplySearchHighlights(
+                matchRanges: findReplaceViewModel.matchRanges,
+                currentIndex: findReplaceViewModel.currentMatchIndex
+            )
+            textViewSearchRef.selectMatch(
+                at: findReplaceViewModel.currentMatchIndex,
+                in: findReplaceViewModel.matchRanges
+            )
+        } else if let line = findReplaceViewModel.currentMatchLine {
+            documentViewModel.requestScrollToLine(line)
+        }
+    }
+
+    private func performReplace() {
+        guard documentViewModel.displayMode == .raw,
+              let currentRange = findReplaceViewModel.currentMatchRange else { return }
+
+        let _ = textViewSearchRef.replaceCurrentMatch(at: currentRange, with: findReplaceViewModel.replaceText)
+        documentViewModel.content = textViewSearchRef.textView?.string ?? documentViewModel.content
+        performSearch()
+    }
+
+    private func performReplaceAll() {
+        guard documentViewModel.displayMode == .raw,
+              !findReplaceViewModel.matchRanges.isEmpty else { return }
+
+        let _ = textViewSearchRef.replaceAllMatches(ranges: findReplaceViewModel.matchRanges, with: findReplaceViewModel.replaceText)
+        documentViewModel.content = textViewSearchRef.textView?.string ?? documentViewModel.content
+        performSearch()
+    }
+
     // MARK: - 文档内容视图
 
     @ViewBuilder
@@ -329,13 +433,14 @@ struct DetailView: View {
                 contentPadding: settings.contentPaddingPoints,
                 scrollToLine: documentViewModel.scrollToLineRequest,
                 fileURL: documentViewModel.currentFileURL,
-                isActive: documentViewModel.displayMode == .raw
+                isActive: documentViewModel.displayMode == .raw,
+                isFindBarVisible: appViewModel.isFindBarVisible,
+                searchRef: textViewSearchRef
             )
             .opacity(documentViewModel.displayMode == .raw ? 1 : 0)
             .allowsHitTesting(documentViewModel.displayMode == .raw)
             .onChange(of: documentViewModel.scrollToLineRequest) { _, newValue in
                 if newValue != nil {
-                    // Raw 模式无需等待布局，0.5 秒即可
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         documentViewModel.clearScrollRequest()
                     }
@@ -351,9 +456,9 @@ struct DetailView: View {
                     scrollToLine: documentViewModel.scrollToLineRequest,
                     scrollViewRef: markdownScrollViewRef
                 )
+                .textual.highlighterTheme(themeColors.highlighterTheme)
                 .onChange(of: documentViewModel.scrollToLineRequest) { _, newValue in
                     if newValue != nil {
-                        // 渲染模式下需要等待 StructuredText 完成布局，超时设长一些
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
                             documentViewModel.clearScrollRequest()
                         }
@@ -361,5 +466,30 @@ struct DetailView: View {
                 }
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if appViewModel.isFindBarVisible, documentViewModel.hasDocument {
+                FindReplaceBar(
+                    viewModel: findReplaceViewModel,
+                    isRawMode: documentViewModel.displayMode == .raw,
+                    onFindNext: { performFindNext() },
+                    onFindPrevious: { performFindPrevious() },
+                    onReplace: { performReplace() },
+                    onReplaceAll: { performReplaceAll() },
+                    onClose: { closeFindBar() }
+                )
+                .padding(.trailing, 16)
+                .padding(.top, 8)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: appViewModel.isFindBarVisible)
+        .onChange(of: findReplaceViewModel.searchText) { _, _ in performSearch() }
+        .onChange(of: findReplaceViewModel.isCaseSensitive) { _, _ in performSearch() }
+        .onChange(of: findReplaceViewModel.isWholeWord) { _, _ in performSearch() }
+        .onChange(of: findReplaceViewModel.isRegularExpression) { _, _ in performSearch() }
+        .onReceive(NotificationCenter.default.publisher(for: .findInDocument)) { _ in openFindBar() }
+        .onReceive(NotificationCenter.default.publisher(for: .findNext)) { _ in performFindNext() }
+        .onReceive(NotificationCenter.default.publisher(for: .findPrevious)) { _ in performFindPrevious() }
+        .onReceive(NotificationCenter.default.publisher(for: .findAndReplace)) { _ in openFindAndReplace() }
     }
 }

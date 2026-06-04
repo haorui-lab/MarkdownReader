@@ -83,6 +83,15 @@ if [ -d "${BUILD_DIR}/${APP_NAME}_MarkdownReader.bundle" ]; then
     cp -R "${BUILD_DIR}/${APP_NAME}_MarkdownReader.bundle/" "$APP_BUNDLE/Contents/Resources/"
 fi
 
+# 复制依赖包的资源 bundle（Textual 的 prism-bundle.js 等）
+for bundle in "${BUILD_DIR}"/*.bundle; do
+    bundle_name=$(basename "$bundle")
+    if [[ "$bundle_name" != "${APP_NAME}_MarkdownReader.bundle" ]]; then
+        cp -R "$bundle" "$APP_BUNDLE/Contents/Resources/"
+        echo "📦 复制依赖资源: $bundle_name"
+    fi
+done
+
 # 使用 actool 编译 Assets.xcassets（确保图标正确显示）
 # macOS 系统需要编译后的 Assets.car 来识别应用图标，SPM bundle 中的原始 PNG 不够
 ASSETS_SRC="${PROJECT_DIR}/Sources/${APP_NAME}/Assets.xcassets"

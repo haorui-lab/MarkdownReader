@@ -1,4 +1,5 @@
 import SwiftUI
+import Textual
 
 // MARK: - 主题颜色令牌
 
@@ -28,6 +29,80 @@ struct ThemeColors: Equatable, Sendable {
     // 派生边框色
     let border: Color
     let borderSubtle: Color
+
+    // MARK: - 代码块语法高亮主题
+
+    /// 从当前主题色派生 Textual 语法高亮主题
+    /// 使用单色 DynamicColor（非 light/dark 双色），确保颜色匹配应用主题而非系统外观
+    var highlighterTheme: StructuredText.HighlighterTheme {
+        let surfaceNS = NSColor(surface).usingColorSpace(.sRGB) ?? NSColor.black
+        let inkNS = NSColor(ink).usingColorSpace(.sRGB) ?? NSColor.white
+        let accentNS = NSColor(accent).usingColorSpace(.sRGB) ?? NSColor.blue
+        let successNS = NSColor(success).usingColorSpace(.sRGB) ?? NSColor.green
+        let dangerNS = NSColor(danger).usingColorSpace(.sRGB) ?? NSColor.red
+
+        let isDark = surfaceNS.perceivedBrightness < inkNS.perceivedBrightness
+
+        let codeForeground = DynamicColor(isDark
+            ? ink.opacity(0.85)
+            : ink.opacity(0.88))
+
+        let codeBackground = DynamicColor(isDark
+            ? surface.mixed(with: ink, fraction: 0.06)
+            : surface.mixed(with: ink, fraction: 0.04))
+
+        let keywordColor = DynamicColor(accent)
+        let builtinColor = DynamicColor(Color(nsColor: accentNS.blended(with: 0.3, of: inkNS) ?? accentNS))
+        let stringColor = DynamicColor(isDark
+            ? success.lighter(by: 0.15)
+            : Color(nsColor: successNS.blended(with: 0.15, of: inkNS) ?? successNS))
+        let charColor = DynamicColor(Color(nsColor: accentNS.blended(with: 0.4, of: successNS) ?? accentNS))
+        let numberColor = DynamicColor(Color(nsColor: accentNS.blended(with: 0.25, of: dangerNS) ?? accentNS))
+        let classColor = DynamicColor(success)
+        let functionColor = DynamicColor(Color(nsColor: accentNS.blended(with: 0.4, of: inkNS) ?? accentNS))
+        let variableColor = DynamicColor(Color(nsColor: inkNS.blended(with: 0.15, of: successNS) ?? inkNS))
+        let commentColor = DynamicColor(fgMuted)
+        let preprocessorColor = DynamicColor(Color(nsColor: dangerNS.blended(with: 0.3, of: accentNS) ?? dangerNS))
+        let attributeColor = DynamicColor(Color(nsColor: accentNS.blended(with: 0.3, of: dangerNS) ?? accentNS))
+        let urlColor = DynamicColor(accent)
+        let insertedColor = DynamicColor(success)
+        let deletedColor = DynamicColor(danger)
+        let markColor = DynamicColor(fgSecondary)
+
+        return StructuredText.HighlighterTheme(
+            foregroundColor: codeForeground,
+            backgroundColor: codeBackground,
+            tokenProperties: [
+                .keyword: AnyTextProperty(.foregroundColor(keywordColor), .fontWeight(.semibold)),
+                .builtin: AnyTextProperty(.foregroundColor(builtinColor)),
+                .literal: AnyTextProperty(.foregroundColor(keywordColor), .fontWeight(.semibold)),
+                .string: AnyTextProperty(.foregroundColor(stringColor)),
+                .char: AnyTextProperty(.foregroundColor(charColor)),
+                .regex: AnyTextProperty(.foregroundColor(stringColor)),
+                .url: AnyTextProperty(.foregroundColor(urlColor)),
+                .number: AnyTextProperty(.foregroundColor(numberColor)),
+                .symbol: AnyTextProperty(.foregroundColor(codeForeground)),
+                .boolean: AnyTextProperty(.foregroundColor(keywordColor), .fontWeight(.semibold)),
+                .className: AnyTextProperty(.foregroundColor(classColor)),
+                .function: AnyTextProperty(.foregroundColor(functionColor)),
+                .functionName: AnyTextProperty(.foregroundColor(functionColor)),
+                .variable: AnyTextProperty(.foregroundColor(variableColor)),
+                .constant: AnyTextProperty(.foregroundColor(variableColor)),
+                .property: AnyTextProperty(.foregroundColor(variableColor)),
+                .comment: AnyTextProperty(.foregroundColor(commentColor)),
+                .blockComment: AnyTextProperty(.foregroundColor(commentColor)),
+                .docComment: AnyTextProperty(.foregroundColor(commentColor)),
+                .mark: AnyTextProperty(.foregroundColor(markColor), .fontWeight(.bold)),
+                .preprocessor: AnyTextProperty(.foregroundColor(preprocessorColor)),
+                .directive: AnyTextProperty(.foregroundColor(preprocessorColor)),
+                .attribute: AnyTextProperty(.foregroundColor(attributeColor)),
+                .tag: AnyTextProperty(.foregroundColor(charColor)),
+                .attributeName: AnyTextProperty(.foregroundColor(attributeColor)),
+                .inserted: AnyTextProperty(.foregroundColor(insertedColor)),
+                .deleted: AnyTextProperty(.foregroundColor(deletedColor)),
+            ]
+        )
+    }
 
     /// 从 ThemeDefinition 和对比度派生颜色
     static func from(_ theme: ThemeDefinition) -> ThemeColors {

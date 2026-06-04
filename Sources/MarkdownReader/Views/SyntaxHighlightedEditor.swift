@@ -2,6 +2,98 @@ import SwiftUI
 import AppKit
 import ObjectiveC
 
+// MARK: - 搜索高亮引用
+
+@MainActor
+final class TextViewSearchRef {
+    weak var textView: HighlightableTextView?
+    private var highlightedRanges: [NSRange] = []
+    private var highlightColor: NSColor = NSColor.systemOrange.withAlphaComponent(0.3)
+    private var currentMatchColor: NSColor = NSColor.systemOrange.withAlphaComponent(0.6)
+    var currentMatchIndex: Int = -1
+
+    func reapplySearchHighlights(matchRanges: [NSRange], currentIndex: Int) {
+        guard let textView = textView,
+              let textStorage = textView.textStorage else { return }
+
+        highlightedRanges = matchRanges
+        currentMatchIndex = currentIndex
+
+        textView.suppressAutoScroll = true
+        defer { textView.suppressAutoScroll = false }
+
+        textView.undoManager?.disableUndoRegistration()
+        defer { textView.undoManager?.enableUndoRegistration() }
+
+        // 使用 beginEditing/endEditing 批量更新，防止每次 addAttribute 触发 textDidChange
+        // 导致 reapplyHighlights 被反复调用，造成搜索高亮被语法高亮覆盖
+        textStorage.beginEditing()
+        let fullRange = NSRange(location: 0, length: textStorage.length)
+        textStorage.removeAttribute(.backgroundColor, range: fullRange)
+        let storageLength = textStorage.length
+        for (index, range) in matchRanges.enumerated() {
+            guard range.location >= 0,
+                  range.location + range.length <= storageLength else { continue }
+            let color: NSColor = index == currentIndex ? currentMatchColor : highlightColor
+            textStorage.addAttribute(.backgroundColor, value: color, range: range)
+        }
+        textStorage.endEditing()
+    }
+
+    func clearSearchHighlights() {
+        guard let textView = textView,
+              let textStorage = textView.textStorage else { return }
+
+        highlightedRanges = []
+        currentMatchIndex = -1
+
+        textView.undoManager?.disableUndoRegistration()
+        defer { textView.undoManager?.enableUndoRegistration() }
+
+        let fullRange = NSRange(location: 0, length: textStorage.length)
+        textStorage.removeAttribute(.backgroundColor, range: fullRange)
+    }
+
+    func selectMatch(at index: Int, in ranges: [NSRange]) {
+        guard let textView = textView,
+              index >= 0, index < ranges.count else { return }
+        let range = ranges[index]
+        let storageLength = textView.textStorage?.length ?? 0
+        guard range.location >= 0,
+              range.location + range.length <= storageLength else { return }
+        currentMatchIndex = index
+        textView.setSelectedRange(range)
+        textView.scrollRangeToVisible(range)
+    }
+
+    func replaceCurrentMatch(at range: NSRange, with replacement: String) -> NSRange? {
+        guard let textView = textView,
+              let textStorage = textView.textStorage else { return nil }
+        let storageLength = textStorage.length
+        guard range.location >= 0,
+              range.location + range.length <= storageLength else { return nil }
+        textStorage.replaceCharacters(in: range, with: replacement)
+        let newLength = (replacement as NSString).length
+        return NSRange(location: range.location, length: newLength)
+    }
+
+    func replaceAllMatches(ranges: [NSRange], with replacement: String) -> Int {
+        guard let textView = textView,
+              let textStorage = textView.textStorage else { return 0 }
+        var count = 0
+        for range in ranges.reversed() {
+            let storageLength = textStorage.length
+            guard range.location >= 0,
+                  range.location + range.length <= storageLength else { continue }
+            textStorage.replaceCharacters(in: range, with: replacement)
+            count += 1
+        }
+        return count
+    }
+
+    func allMatchRanges() -> [NSRange] { highlightedRanges }
+}
+
 // MARK: - 全局 Per-File UndoManager 引用
 
 /// 当前活跃文件的 UndoManager，供 NSWindow swizzled getter 访问
@@ -163,6 +255,9 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
     var fileURL: URL?
     /// 是否处于活跃状态（Raw 模式），用于自动获取焦点
     var isActive: Bool = false
+    var searchRef: TextViewSearchRef?
+    /// 查找面板是否可见，可见时不抢占焦点
+    var isFindBarVisible: Bool = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -182,7 +277,7 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.isRichText = false
         textView.allowsUndo = true
-        textView.usesFindBar = true
+        textView.usesFindBar = false
         textView.isIncrementalSearchingEnabled = true
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
@@ -239,6 +334,7 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
 
         context.coordinator.textView = textView
         context.coordinator.scrollView = scrollView
+        searchRef?.textView = textView
 
         // 初始化 UndoManagerProvider 的活跃文件
         UndoManagerProvider.shared.switchFile(to: fileURL)
@@ -311,7 +407,8 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         }
 
         // First responder 管理：切换到 Raw 模式时自动获取焦点
-        if isActive, let window = textView.window, window.firstResponder !== textView {
+        // 查找面板可见时不抢占焦点，避免搜索输入框失去焦点
+        if isActive, !isFindBarVisible, let window = textView.window, window.firstResponder !== textView {
             DispatchQueue.main.async {
                 window.makeFirstResponder(textView)
             }
@@ -498,6 +595,17 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
 
             // 恢复选中范围（此时滚动位置已固定，suppressAutoScroll 防止二次跳动）
             textView.setSelectedRange(selectedRange)
+
+            // 重新叠加搜索高亮（语法高亮会 setAttributes 全文本重置，覆盖搜索高亮）
+            // 延迟一帧执行，确保语法高亮的 endEditing 已完成，避免被覆盖
+            if let searchRef = parent.searchRef, !searchRef.allMatchRanges().isEmpty {
+                DispatchQueue.main.async {
+                    searchRef.reapplySearchHighlights(
+                        matchRanges: searchRef.allMatchRanges(),
+                        currentIndex: searchRef.currentMatchIndex
+                    )
+                }
+            }
 
             // 延迟再确认一次滚动位置，防止布局管理器异步调整
             let finalY = clampedY

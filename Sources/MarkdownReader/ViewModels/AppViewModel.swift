@@ -84,6 +84,11 @@ final class AppViewModel {
     /// 是否处于全屏模式
     var isFullScreen: Bool = false
 
+    // MARK: - 查找替换状态
+
+    /// 查找面板是否可见
+    var isFindBarVisible: Bool = false
+
     // MARK: - 方法
 
     /// 切换 Sidebar 显隐
@@ -103,6 +108,27 @@ final class AppViewModel {
             if isOutlineVisible {
                 outlineWidth = Self.defaultOutlineWidth
             }
+        }
+    }
+
+    /// 切换查找面板显隐
+    func toggleFindBar(expandReplace: Bool = false) {
+        withAnimation(.easeOut(duration: 0.2)) {
+            isFindBarVisible.toggle()
+        }
+    }
+
+    /// 显示查找面板
+    func showFindBar(expandReplace: Bool = false) {
+        withAnimation(.easeOut(duration: 0.2)) {
+            isFindBarVisible = true
+        }
+    }
+
+    /// 隐藏查找面板
+    func hideFindBar() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            isFindBarVisible = false
         }
     }
 
