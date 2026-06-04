@@ -141,7 +141,11 @@ final class FileTreeViewModel {
             expandedDirs.insert(dir)
 
             // 如果选中的文件已不存在，清除选中
-            if let selected = selectedFileURL, !allPaths.contains(selected) {
+            // 仅当选中文件的路径位于当前根目录下时才清除
+            // 单文件模式下，选中文件可能不在根目录树中，不应被清除
+            if let selected = selectedFileURL,
+               selected.path.hasPrefix(dir.path + "/"),
+               !allPaths.contains(selected) {
                 selectedFileURL = nil
             }
 
@@ -166,11 +170,15 @@ final class FileTreeViewModel {
     }
 
     /// 停止文件监控并清空目录树
-    func clearDirectory() {
+    /// - Parameter clearSelection: 是否清除选中状态，默认 true。
+    ///   切换单文件模式时传 false，避免 selectedFileURL 瞬时 nil 翻转触发 SelectionChangeModifier。
+    func clearDirectory(clearSelection: Bool = true) {
         fileSystemWatcher.stopWatching()
         nodes = []
         expandedDirs = []
-        selectedFileURL = nil
+        if clearSelection {
+            selectedFileURL = nil
+        }
         errorMessage = nil
         isEmptyDirectory = false
         isRefreshing = false

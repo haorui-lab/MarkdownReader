@@ -105,9 +105,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - 应用生命周期
 
     /// 应用启动完成后，处理冷启动场景
-    /// 冷启动时不发送 restoreLastLocation 通知，
-    /// 点击 app 图标启动时始终显示欢迎页，不再自动恢复上次位置。
     /// 如果有待处理文件 URL，ContentView.task 会通过 UserDefaults 读取并打开。
+    /// 如果没有待处理文件且 reopenLastLocation 开启，发送 restoreLastLocation 通知。
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSWindow.allowsAutomaticWindowTabbing = false
 
@@ -131,25 +130,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else if self.pendingOpenDirectoryURL != nil {
                 self.pendingOpenDirectoryURL = nil
                 self.logger.info("Cold start: pending directory handled by ContentView.task via UserDefaults")
+            } else if SettingsModel.shared.reopenLastLocation {
+                self.logger.info("Cold start: restoring last location")
+                NotificationCenter.default.post(name: .restoreLastLocation, object: nil)
             }
-            // 不再发送 .restoreLastLocation 通知
-            // 点击 app 图标启动时始终显示欢迎页
         }
     }
 
     // MARK: - Dock 点击处理
 
     /// 用户点击 Dock 图标时调用
-    /// 当所有窗口都关闭后点击 Dock 图标，激活隐藏窗口并重置为欢迎页
+    /// 当所有窗口都关闭后点击 Dock 图标，激活隐藏窗口
+    /// 根据 reopenLastLocation 设置决定恢复上次位置还是显示欢迎页
+    /// 返回 false 阻止 SwiftUI WindowGroup 自动创建新窗口，避免双窗口 bug
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
-            logger.info("applicationShouldHandleReopen — activating hidden window and resetting to welcome")
+            logger.info("applicationShouldHandleReopen — activating hidden window")
             activateFirstHiddenWindow()
-            // 重置为欢迎页，不恢复旧窗口的文档内容
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(name: .resetToWelcome, object: nil)
+            DispatchQueue.main.async { [weak self] in
+                guard self != nil else { return }
+                if SettingsModel.shared.reopenLastLocation {
+                    // 恢复上次位置
+                    NotificationCenter.default.post(name: .restoreLastLocation, object: nil)
+                } else {
+                    // 重置为欢迎页
+                    NotificationCenter.default.post(name: .resetToWelcome, object: nil)
+                }
             }
         }
-        return true
+        return false
     }
 }

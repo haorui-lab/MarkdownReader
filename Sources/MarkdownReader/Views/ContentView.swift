@@ -86,6 +86,9 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .resetToWelcome)) { _ in
                 resetToWelcome()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .restoreLastLocation)) { _ in
+                restoreLastLocation()
+            }
             .onChange(of: colorScheme) { _, newScheme in
                 // 仅在「跟随系统」模式下更新 systemIsDark
                 // 避免手动选择浅色/深色时，colorScheme 变化污染 systemIsDark
@@ -174,6 +177,21 @@ struct ContentView: View {
         }
         fileTreeViewModel.selectedFileURL = nil
         documentViewModel.clearDocument()
+    }
+
+    /// 恢复上次打开的位置（目录或文件）
+    /// 用于 Dock 点击重新激活且 reopenLastLocation 开启时
+    private func restoreLastLocation() {
+        if let dir = settings.lastOpenedDirectory {
+            appViewModel.openDirectory(dir)
+            settings.addRecentItem(url: dir, isDirectory: true)
+        } else if let file = settings.lastOpenedFile {
+            appViewModel.openSingleFile(file)
+            fileTreeViewModel.selectedFileURL = file
+            settings.addRecentItem(url: file, isDirectory: false)
+        } else {
+            resetToWelcome()
+        }
     }
 }
 
@@ -539,9 +557,7 @@ private struct DirectoryChangeModifier: ViewModifier {
                         await fileTreeViewModel.loadDirectory(dir)
                     }
                 } else {
-                    // 目录关闭（如切换到单文件模式）
-                    // 跳过 clearDirectory()：文件树即将被隐藏，无需清空
-                    // 如果用户重新打开目录，loadDirectory 会覆盖旧数据
+                    fileTreeViewModel.clearDirectory(clearSelection: false)
                 }
             }
     }
@@ -573,10 +589,9 @@ private struct SelectionChangeModifier: ViewModifier {
                        !FileManager.default.fileExists(atPath: deletedURL.path),
                        documentViewModel.isDirty {
                         handleDeletedFileWithUnsavedChanges(deletedURL)
-                    } else if !documentViewModel.isUntitled {
-                        // 仅在非 untitled 文件时取消选中
-                        // untitled 文件不在文件树中，selectedFileURL 变为 nil 是正常的，
-                        // 不应重置文档状态
+                    } else if !documentViewModel.isUntitled && !appViewModel.isSingleFileMode {
+                        // 单文件模式下不响应 selectedFileURL 变 nil 而取消文档
+                        // 单文件模式的文档生命周期应独立于文件树选中状态
                         documentViewModel.deselectCurrentFile()
                     }
                     appViewModel.selectedFile = nil
