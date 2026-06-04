@@ -9,7 +9,8 @@ import os
 /// - 热启动有窗口：直接发送通知
 /// - 热启动无窗口：激活 SwiftUI 创建的不可见窗口，然后发送通知
 /// - Dock 点击无窗口：激活不可见窗口
-final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let logger = Logger(subsystem: "com.markdownreader.app", category: "AppDelegate")
 
