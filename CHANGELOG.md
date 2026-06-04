@@ -5,6 +5,48 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.6] - 2026-06-05
+
+### 新增
+
+- **查找替换功能**：
+  - VSCode 风格浮动查找面板，锚定文档区域右上角，Cmd+F 打开，Esc 关闭
+  - 支持大小写敏感（Aa）、全词匹配（W*）、正则搜索（.*）
+  - 实时匹配计数和当前位置显示（如 3/15），无匹配时红色提示
+  - ▲▼ 按钮和 Cmd+G / Cmd+Shift+G 导航匹配项
+  - Raw 模式下 NSTextStorage 背景色高亮所有匹配项，当前匹配高亮加深
+  - Rendered 模式下通过行号跳转定位匹配位置
+  - 替换当前匹配和全部替换（仅 Raw 模式），文字按钮替代图标更直观
+  - ▶/▼ 展开收起替换行
+  - 新增 FindReplaceViewModel、FindReplaceBar、TextViewSearchRef 三个组件
+  - 新增 12 个查找替换相关本地化键值（简中/繁中/英文）
+- **图片渲染**：
+  - 渲染视图支持显示本地和远程图片（PNG、JPG、GIF、WebP、SVG）
+  - 新增 ImageAttachmentLoader 处理图片加载，支持本地文件和 HTTP/HTTPS URL
+  - SVG 图片通过 WKWebView 渲染为位图后显示
+  - 链接图片（可点击跳转的图片）通过 URL fragment 编码链接地址实现
+  - 图片自动适配宽度，保持纵横比
+- **上标下标渲染**：
+  - 新增 SupSubMarkupParser，支持 `<sup>`/`<sub>` HTML 标签渲染
+  - 新增 MarkdownContentPreprocessor 预处理 Markdown 内容中的上标下标标记
+- **代码块语法高亮主题**：
+  - ThemeColors 新增 `highlighterTheme` 属性，从主题色派生 Textual 语法高亮配色
+  - 23 套预设主题各有匹配的代码高亮色彩，关键字、字符串、注释等 20+ token 类型
+  - 深色/浅色主题自动适配代码前景色和背景色
+
+### 修复
+
+- **Dock 点击双窗口 bug**：
+  - `applicationShouldHandleReopen` 返回 false 阻止 SwiftUI 自动创建新窗口
+  - 根据 reopenLastLocation 设置发送 restoreLastLocation 或 resetToWelcome 通知
+- **冷启动恢复位置**：
+  - 冷启动时若无待处理文件且 reopenLastLocation 开启，发送 restoreLastLocation 通知恢复上次位置
+  - 新增 `restoreLastLocation()` 方法恢复上次打开的目录或文件
+- **单文件模式稳定性**：
+  - 切换单文件模式时保留 selectedFileURL，避免瞬时 nil 翻转触发 SelectionChangeModifier
+  - 单文件模式下不再因 selectedFileURL 变 nil 而取消文档，文档生命周期独立于文件树
+  - 文件树展开时选中文件清除逻辑增加路径前缀检查，不误清不在根目录树中的选中
+
 ## [1.0.5] - 2026-06-04
 
 ### 修复
