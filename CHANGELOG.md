@@ -5,6 +5,19 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.2] - 2026-06-04
+
+### 修复
+
+- **双击 .md 文件无法打开应用**：重写 AppDelegate，改用 `application(_:open:)` 替代 `application(_:openFiles:)`，修复 macOS 15+ 上 SwiftUI WindowGroup 窗口不可见的问题
+- **冷启动/热启动文件打开**：新增 UserDefaults 回退机制解决文件打开时序问题；新增 `activateFirstHiddenWindow()` 处理冷启动、热启动和 Dock 点击场景
+- **Dock 点击激活**：新增 `applicationShouldHandleReopen` 实现 Dock 点击时激活窗口
+- **文件打开幂等保护**：ContentView 中对 openFile/openDirectory 通知添加幂等保护，防止重复触发
+- **恢复上次位置**：新增 `restoreLastLocation` 通知机制，确保双击文件启动时跳过恢复上次位置
+- **应用图标**：更新全部 AppIcon 尺寸（16–512pt），新增图标生成脚本
+- **DMG 打包**：package.sh 优先使用 create-dmg，支持 DMG 卷图标；移除 DMG 的 ad-hoc 签名（避免 Gatekeeper 误拦截）
+- **文件关联**：LSHandlerRank 从 Alternate 改为 Default，新增 UTImportedTypeDeclarations 确保 .md 文件正确关联
+
 ## [1.0.1] - 2026-06-03
 
 ### 新增
