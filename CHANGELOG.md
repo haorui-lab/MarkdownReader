@@ -5,6 +5,26 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.3] - 2026-06-04
+
+### 新增
+
+- **自动更新功能**：基于 GitHub Releases 实现应用内自动更新检查与安装
+  - 启动时自动检查更新（延迟 2 秒，避免影响启动速度）
+  - 菜单栏「检查更新…」手动触发更新检查
+  - 更新弹窗显示版本号、Release Notes、下载进度
+  - 支持自动安装并重启（Sparkle 式体验）和手动安装两种模式
+  - 支持「跳过此版本」和「稍后提醒」
+  - 新增 UpdateService、UpdateViewModel、UpdateView 三个组件
+  - SettingsModel 新增 skippedVersion、lastUpdateCheckTime 设置项
+- **复制路径本地化**：新增 titleBarCopyPath、contextMenuCopyPath 本地化键值（简中/繁中/英文）
+- **自动更新本地化**：新增 18 个更新相关本地化键值（简中/繁中/英文）
+
+### 变更
+
+- **CI 发布流程**：GitHub Actions release 工作流新增 ZIP 打包，Release 同时上传 DMG 和 ZIP
+- **发布说明目录**：发布说明文件从项目根目录移至 `docs/releases/` 目录，CI 路径同步更新
+
 ## [1.0.2] - 2026-06-04
 
 ### 修复

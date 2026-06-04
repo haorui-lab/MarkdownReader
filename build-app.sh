@@ -8,7 +8,7 @@
 set -euo pipefail
 
 APP_NAME="MarkdownReader"
-VERSION="1.0.2"
+VERSION="1.0.3"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="debug"
 SIGN_IDENTITY=""
