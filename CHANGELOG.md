@@ -5,6 +5,19 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.7] - 2026-06-05
+
+### 变更
+
+- **查找替换栏布局重构**：改为三列布局（chevron / input / buttons），移除固定宽度约束，输入框自适应宽度
+- **原文模式文字颜色**：SyntaxHighlightedEditor 主题切换时同步更新文字颜色（`textView.textColor`）
+
+### 修复
+
+- **语法高亮主题刷新**：切换主题后重新应用语法高亮颜色，修复之前主题切换后代码高亮不更新的问题
+- **CI 依赖资源 bundle**：构建 .app 时复制依赖资源 bundle（Textual prism-bundle.js 等），修复代码块语法高亮在分发版中不工作的问题
+- **自动更新签名断裂**：`cp -R` 替换应用后重新 ad-hoc 签名，修复 macOS 可能限制 AppKit 功能的问题
+
 ## [1.0.6] - 2026-06-05
 
 ### 新增
