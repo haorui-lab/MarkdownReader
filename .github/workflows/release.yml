@@ -62,6 +62,31 @@ jobs:
       - name: Build
         run: swift build -c release
 
+      - name: Patch Bundle.module resource paths
+        # SPM generates resource_bundle_accessor.swift using Bundle.main.bundleURL to locate
+        # resource bundles. On macOS, Bundle.main.bundleURL points to the .app root directory,
+        # but resource bundles are placed in Contents/Resources/ by convention.
+        # This patch replaces bundleURL with (resourceURL ?? bundleURL) so Bundle.module
+        # can find resource bundles at Contents/Resources/ at runtime.
+        # Without this patch, the app crashes with assertionFailure in NSBundle.module
+        # because it cannot find swiftui-math_SwiftUIMath.bundle or textual_Textual.bundle.
+        run: |
+          PATCHED=0
+          while IFS= read -r accessor; do
+            if grep -q 'Bundle\.main\.bundleURL\.appendingPathComponent' "$accessor"; then
+              sed -i '' 's/Bundle\.main\.bundleURL\.appendingPathComponent/(Bundle.main.resourceURL ?? Bundle.main.bundleURL).appendingPathComponent/g' "$accessor"
+              PATCHED=$((PATCHED + 1))
+              echo "📝 Patched Bundle.module path: $accessor"
+            fi
+          done < <(find .build -name "resource_bundle_accessor.swift" -type f)
+
+          if [[ "$PATCHED" -gt 0 ]]; then
+            echo "🔨 Rebuilding with patched Bundle.module paths..."
+            swift build -c release
+          else
+            echo "✅ No patches needed (accessors already use resourceURL)"
+          fi
+
       - name: Assemble .app bundle
         run: |
           VERSION="${{ steps.version.outputs.version }}"

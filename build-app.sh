@@ -66,6 +66,30 @@ else
 fi
 
 BUILD_DIR="${PROJECT_DIR}/.build/${ARCH}-apple-macosx/${CONFIG}"
+
+# 修补 SPM 生成的 resource_bundle_accessor.swift
+# SPM 使用 Bundle.main.bundleURL 查找 bundle，但 macOS .app 的资源在 Contents/Resources/
+# 需要替换为 Bundle.main.resourceURL，使 Bundle.module 能在正确路径找到资源 bundle
+PATCHED=0
+while IFS= read -r accessor; do
+    if grep -q 'Bundle\.main\.bundleURL\.appendingPathComponent' "$accessor"; then
+        sed -i '' 's/Bundle\.main\.bundleURL\.appendingPathComponent/(Bundle.main.resourceURL ?? Bundle.main.bundleURL).appendingPathComponent/g' "$accessor"
+        PATCHED=$((PATCHED + 1))
+        echo "📝 修补 Bundle.module 路径: $accessor"
+    fi
+done < <(find "${BUILD_DIR}" -name "resource_bundle_accessor.swift" -type f)
+
+if [[ "$PATCHED" -gt 0 ]]; then
+    echo "🔨 重新编译（应用 Bundle.module 修补）..."
+    if [[ "$ARCH" == "x86_64" ]]; then
+        swift build -c "$CONFIG" --arch x86_64
+    elif [[ "$ARCH" == "arm64" ]]; then
+        swift build -c "$CONFIG" --arch arm64
+    else
+        swift build -c "$CONFIG"
+    fi
+fi
+
 APP_BUNDLE="${PROJECT_DIR}/${APP_NAME}.app"
 
 # 清理旧的

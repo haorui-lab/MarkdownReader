@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.8] - 2026-06-05
+
+### 修复
+
+- **Bundle.module 资源路径修补**：SPM 生成的 `resource_bundle_accessor.swift` 使用 `Bundle.main.bundleURL` 查找资源 bundle，但 macOS .app 的资源位于 `Contents/Resources/`，导致运行时找不到 Textual 和 swiftui-math 的资源 bundle 而崩溃。修补为 `Bundle.main.resourceURL` 使路径正确解析
+- **CI 构建修补**：GitHub Actions release 工作流新增 Bundle.module 路径修补步骤，确保 CI 构建的 .app 也能正确加载依赖资源
+
 ## [1.0.7] - 2026-06-05
 
 ### 变更
