@@ -5,6 +5,19 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.10] - 2026-06-06
+
+### 变更
+
+- **CI 发布流程重构**：将单一 `release` job 拆分为 `create-release`（仅创建 draft release，等待本地构建上传）和 `ci-build`（可选后备，需手动启用 `use_ci_build`）
+- **新增本地发布脚本**：`release-local.sh`，本地构建 → 创建 DMG/ZIP → 上传到 GitHub Release，绕过 CI 环境差异导致的运行时问题
+- **CI 签名改为精确签名**：不再使用已弃用的 `codesign --deep`，改为分别签名 `Resources/*.bundle` 和主 app
+
+### 修复
+
+- **CI 构建目录修正**：构建产物路径从 `.build/release/` 改为 `.build/arm64-apple-macosx/release/`，匹配 `--arch arm64` 构建输出
+- **CI 签名方式修复**：与 v1.0.9 本地构建签名方式一致，避免递归签名破坏 SwiftUI 颜色目录
+
 ## [1.0.9] - 2026-06-06
 
 ### 修复
