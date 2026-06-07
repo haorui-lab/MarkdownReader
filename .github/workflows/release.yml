@@ -87,7 +87,11 @@ jobs:
           if [ -f "docs/releases/release-notes-${TAG}.md" ]; then
             cat "docs/releases/release-notes-${TAG}.md" >> /tmp/release-body.md
           elif [ -f "CHANGELOG.md" ]; then
-            awk "/^## \\[.*${VERSION}.*\\]/,/^## \\[/" CHANGELOG.md | sed '$d' >> /tmp/release-body.md
+            awk -v ver="$VERSION" '
+              /^## \[/ && section { exit }
+              /^## \[/ && $0 ~ "\\[" ver "\\]" { section = 1 }
+              section { print }
+            ' CHANGELOG.md >> /tmp/release-body.md
           fi
 
           gh release create "$TAG" \
@@ -266,7 +270,11 @@ jobs:
           if [ -f "docs/releases/release-notes-${TAG}.md" ]; then
             cat "docs/releases/release-notes-${TAG}.md" >> /tmp/release-body.md
           elif [ -f "CHANGELOG.md" ]; then
-            awk "/^## \\[.*${VERSION}.*\\]/,/^## \\[/" CHANGELOG.md | sed '$d' >> /tmp/release-body.md
+            awk -v ver="$VERSION" '
+              /^## \[/ && section { exit }
+              /^## \[/ && $0 ~ "\\[" ver "\\]" { section = 1 }
+              section { print }
+            ' CHANGELOG.md >> /tmp/release-body.md
           fi
 
           gh release create "$TAG" \

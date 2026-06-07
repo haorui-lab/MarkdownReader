@@ -112,13 +112,18 @@ BODY
 if [ -f "docs/releases/release-notes-${TAG}.md" ]; then
     cat "docs/releases/release-notes-${TAG}.md" >> /tmp/release-body.md
 elif [ -f "CHANGELOG.md" ]; then
-    awk "/^## \\[.*${VERSION}.*\\]/,/^## \\[/" CHANGELOG.md | sed '$d' >> /tmp/release-body.md
+    awk -v ver="$VERSION" '
+      /^## \[/ && section { exit }
+      /^## \[/ && $0 ~ "\\[" ver "\\]" { section = 1 }
+      section { print }
+    ' CHANGELOG.md >> /tmp/release-body.md
 fi
 
 # 检查 release 是否已存在
 if gh release view "$TAG" &>/dev/null; then
-    echo "📝 Release $TAG 已存在，上传产物..."
+    echo "📝 Release $TAG 已存在，上传产物并更新 notes..."
     gh release upload "$TAG" "$DMG_NAME" "$ZIP_NAME" --clobber
+    gh release edit "$TAG" --notes-file /tmp/release-body.md
 else
     gh release create "$TAG" \
         --title "$TAG" \
