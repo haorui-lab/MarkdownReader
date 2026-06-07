@@ -19,7 +19,7 @@ on:
 env:
   SCHEME: MarkdownReader
   PRODUCT_NAME: MarkdownReader
-  BUNDLE_ID: com.markdownreader.app
+  BUNDLE_ID: com.markdownreader.app.v2
 
 permissions:
   contents: write
@@ -191,7 +191,7 @@ jobs:
           actool \
             --compile "$RESOURCES_DIR" \
             --platform macosx \
-            --minimum-deployment-target 15.0 \
+            --minimum-deployment-target 26 \
             --app-icon AppIcon \
             --output-format human-readable-text \
             --output-partial-info-plist /tmp/partial.plist \

@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "MarkdownReader",
     platforms: [
-        .macOS(.v15)
+        .macOS(.v26)
     ],
     products: [
         .executable(
