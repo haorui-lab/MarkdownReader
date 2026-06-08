@@ -1,6 +1,4 @@
 (function() {
-  let _mermaidRenderId = 0;
-
   const MR = {
     version: '2.0.0',
 
@@ -69,6 +67,25 @@
         }
       }
       return visible;
+    },
+
+    getTopVisibleLine() {
+      const elements = document.querySelectorAll('[data-line]');
+      const threshold = 120;
+      let best = null;
+      let minDiff = Infinity;
+      for (let i = elements.length - 1; i >= 0; i--) {
+        const rect = elements[i].getBoundingClientRect();
+        const diff = threshold - rect.top;
+        if (diff >= 0 && diff < minDiff) {
+          minDiff = diff;
+          best = elements[i];
+        }
+      }
+      if (best) {
+        return parseInt(best.dataset.line) || 1;
+      }
+      return 1;
     },
 
     getScrollPosition() {
@@ -144,48 +161,33 @@
       if (mermaidBlocks.length === 0) return;
       if (typeof mermaid === 'undefined') return;
 
-      const renderId = ++_mermaidRenderId;
       const { isDark, themeVariables } = MR._resolveThemeColors();
 
       mermaid.initialize({
         startOnLoad: false,
+        securityLevel: 'loose',
         theme: isDark ? 'dark' : 'default',
         themeVariables
       });
 
+      let idx = 0;
       mermaidBlocks.forEach(block => {
         const pre = block.parentElement;
         if (!pre || pre.tagName !== 'PRE') return;
+        const source = block.textContent;
         const container = document.createElement('div');
         container.className = 'mermaid-container';
-        container.dataset.mermaidSource = block.textContent;
-        const mermaidDiv = document.createElement('div');
-        mermaidDiv.className = 'mermaid';
-        mermaidDiv.textContent = block.textContent;
-        container.appendChild(mermaidDiv);
+        container.dataset.mermaidSource = source;
+        const id = 'mermaid-' + (++idx) + '-' + Math.random().toString(36).slice(2);
+        mermaid.render(id, source).then(({ svg, bindFunctions }) => {
+          container.innerHTML = svg;
+          if (bindFunctions) bindFunctions(container);
+        }).catch(err => {
+          console.error('[MarkdownReader] mermaid.render error:', err);
+          const detail = (err && err.message) ? String(err.message).substring(0, 200) : String(err).substring(0, 200);
+          MR._showMermaidError(container, '渲染失败：' + detail);
+        });
         pre.replaceWith(container);
-      });
-
-      mermaid.run({ suppressErrors: true }).then(() => {
-        if (renderId !== _mermaidRenderId) return;
-        document.querySelectorAll('.mermaid-container').forEach(container => {
-          const svg = container.querySelector('svg');
-          if (svg) {
-            const errorEl = svg.querySelector('.error-icon, .error-text');
-            if (errorEl) MR._showMermaidError(container, '图表语法错误，请检查语法是否正确。');
-          } else {
-            const unprocessed = container.querySelector('div.mermaid:not([data-processed])');
-            if (unprocessed) MR._showMermaidError(container, '图表渲染失败。');
-          }
-        });
-      }).catch(err => {
-        if (renderId !== _mermaidRenderId) return;
-        console.error('[MarkdownReader] Mermaid render error:', err);
-        document.querySelectorAll('.mermaid-container').forEach(container => {
-          if (!container.querySelector('svg')) {
-            MR._showMermaidError(container, '图表渲染失败。');
-          }
-        });
       });
     },
 
@@ -194,39 +196,28 @@
       if (containers.length === 0) return;
       if (typeof mermaid === 'undefined') return;
 
-      const renderId = ++_mermaidRenderId;
       const { isDark, themeVariables } = MR._resolveThemeColors();
 
       mermaid.initialize({
         startOnLoad: false,
+        securityLevel: 'loose',
         theme: isDark ? 'dark' : 'default',
         themeVariables
       });
 
-      containers.forEach(container => {
+      containers.forEach((container, idx) => {
         const source = container.dataset.mermaidSource;
         if (!source) return;
+        const id = 'mermaid-re-' + idx + '-' + Math.random().toString(36).slice(2);
         container.innerHTML = '';
-        const mermaidDiv = document.createElement('div');
-        mermaidDiv.className = 'mermaid';
-        mermaidDiv.textContent = source;
-        container.appendChild(mermaidDiv);
-      });
-
-      mermaid.run({ suppressErrors: true }).then(() => {
-        if (renderId !== _mermaidRenderId) return;
-        document.querySelectorAll('.mermaid-container').forEach(container => {
-          const svg = container.querySelector('svg');
-          if (svg) {
-            const errorEl = svg.querySelector('.error-icon, .error-text');
-            if (errorEl) MR._showMermaidError(container, '图表语法错误，请检查语法是否正确。');
-          } else {
-            MR._showMermaidError(container, '图表渲染失败。');
-          }
+        mermaid.render(id, source).then(({ svg, bindFunctions }) => {
+          container.innerHTML = svg;
+          if (bindFunctions) bindFunctions(container);
+        }).catch(err => {
+          console.error('[MarkdownReader] mermaid rerender error:', err);
+          const detail = (err && err.message) ? String(err.message).substring(0, 200) : String(err).substring(0, 200);
+          MR._showMermaidError(container, '渲染失败：' + detail);
         });
-      }).catch(err => {
-        if (renderId !== _mermaidRenderId) return;
-        console.error('[MarkdownReader] Mermaid rerender error:', err);
       });
     },
 
