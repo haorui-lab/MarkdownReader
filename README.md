@@ -3,7 +3,7 @@
 > 不是又一个全能编辑器，只是一个安静的阅读器。
 ![screenshot](screenshot.png)
 
-![macOS 15.0+](https://img.shields.io/badge/macOS-15.0+-blue)
+![macOS 26+](https://img.shields.io/badge/macOS-26+-blue)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
 
 ---
@@ -28,11 +28,14 @@ Markdown Reader 就是为这个场景而生：
 | 功能 | 说明 |
 |------|------|
 | Markdown 渲染 | GitHub 风格渲染，代码高亮，支持表格、任务列表 |
+| Mermaid 图表 | 流程图、时序图、甘特图等 Mermaid 图表渲染 |
+| 数学公式 | KaTeX 渲染 LaTeX 行内和块级公式 |
 | 实时编辑 | 原文模式直接编辑，Cmd+S 保存，切换文件自动保留未保存内容 |
 | 目录树 | 递归浏览文件夹，键盘导航，右键新建/重命名/删除 |
 | 大纲导航 | 自动提取标题层级，点击跳转，阅读长文档更高效 |
-| 23 套主题 | 15 深色 + 8 浅色，支持自定义配色和对比度调节 |
+| 29 套主题 | 20 深色 + 9 浅色，支持自定义配色和对比度调节 |
 | 多语言 | 简体中文、繁体中文、英文，自动跟随系统 |
+| 命令行工具 | `mdr` 命令从终端直接打开 Markdown 文件 |
 | 窗口恢复 | 记住上次浏览位置，重新打开自动还原 |
 
 ---
@@ -57,13 +60,7 @@ Markdown Reader 就是为这个场景而生：
 
 ### 系统要求
 
-macOS 15.0 (Sequoia) 或更高版本。
-
----
-
-## 后续计划
-
-- 支持 Mermaid 图表渲染
+macOS 26 (Tahoe) 或更高版本。
 
 ---
 

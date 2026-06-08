@@ -5,13 +5,27 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [2.0.0] - 2026-06-08
+
+### 新增
+
+- **WKWebView 渲染引擎**：渲染模式从 Textual 迁移至 cmark-gfm + WKWebView，支持完整的 GFM 扩展语法（表格、任务列表、脚注、删除线等）
+- **Mermaid 图表渲染**：渲染视图支持 Mermaid 流程图、时序图、甘特图等图表类型，支持主题颜色同步和语法错误检测
+- **KaTeX 数学公式**：渲染视图支持 LaTeX 行内公式（`$...$`）和块级公式（`$$...$$`），使用 KaTeX 本地渲染
+- **Prism.js 代码高亮**：渲染视图使用 Prism.js 实现 30+ 语言的语法高亮，替代 Textual 内置高亮
+- **MPE 预设主题**：新增 6 套 Markdown Preview Enhanced 风格预设主题
+- **命令行工具 mdr**：支持在终端安装/卸载 `mdr` 命令，直接从命令行打开 Markdown 文件
+- **渲染内容最大宽度跟随窗口**：新增设置选项，渲染内容宽度可跟随窗口自适应
+- **Raw→Rendered 光标同步**：切换渲染/原文模式时自动同步光标位置
+- **GitHub Pages 项目主页**：新增项目官网，展示功能特性、主题预览和下载入口
 
 ### 变更
 
-- 渲染引擎从 Textual 迁移到 cmark-gfm + WebView
-- 最低部署目标从 macOS 15.0 提升到 macOS 26
-- Bundle ID 保持 com.markdownreader.app（单线发布，不再隔离）
+- **渲染引擎迁移**：从 Textual (StructuredText) 迁移到 cmark-gfm + WKWebView
+- **最低部署目标**：从 macOS 15.0 提升到 macOS 26
+- **Bundle ID**：保持 `com.markdownreader.app`（单线发布，回归统一标识）
+- **JS/CSS 资源本地化**：Mermaid、KaTeX、Prism.js 及字体文件全部本地打包，无需网络
+- **移除 x86_64 支持**：回归 arm64 单架构构建
 
 ## [1.0.10] - 2026-06-06
 
