@@ -14,6 +14,38 @@ struct ThemeDefinition: Identifiable, Codable, Equatable, Sendable {
     let success: String   // 成功色
     let danger: String    // 危险色
     let contrast: Int     // 对比度 0-100
+
+    // 排版变量（nil = 使用 markdown.css 默认值）
+    let bodyFontFamily: String?
+    let headingFontFamily: String?
+    let codeFontFamily: String?
+    let bodyFontSize: String?
+    let lineHeight: String?
+    let letterSpacing: String?
+    let borderRadius: String?
+
+    init(id: String, name: String, type: ThemeType,
+         surface: String, ink: String, accent: String, success: String, danger: String, contrast: Int,
+         bodyFontFamily: String? = nil, headingFontFamily: String? = nil, codeFontFamily: String? = nil,
+         bodyFontSize: String? = nil, lineHeight: String? = nil, letterSpacing: String? = nil,
+         borderRadius: String? = nil) {
+        self.id = id
+        self.name = name
+        self.type = type
+        self.surface = surface
+        self.ink = ink
+        self.accent = accent
+        self.success = success
+        self.danger = danger
+        self.contrast = contrast
+        self.bodyFontFamily = bodyFontFamily
+        self.headingFontFamily = headingFontFamily
+        self.codeFontFamily = codeFontFamily
+        self.bodyFontSize = bodyFontSize
+        self.lineHeight = lineHeight
+        self.letterSpacing = letterSpacing
+        self.borderRadius = borderRadius
+    }
 }
 
 /// 主题类型
@@ -27,8 +59,7 @@ enum ThemeType: String, Codable, Sendable, CaseIterable {
 /// 所有预设主题，逐字对照 buddy-macos docs/theme-scheme.md 第五节
 enum PresetThemes {
 
-    // MARK: - 深色主题（15 个）
-    // 来源: buddy-macos docs/theme-scheme.md 5.1 节
+    // MARK: - 深色主题（15 个原生 + 4 个 MPE）
 
     static let darkThemes: [ThemeDefinition] = [
         ThemeDefinition(id: "buddy-dark", name: "Default Dark", type: .dark,
@@ -76,10 +107,30 @@ enum PresetThemes {
         ThemeDefinition(id: "vitesse-dark", name: "Vitesse Dark", type: .dark,
                         surface: "#121212", ink: "#dbd7ca", accent: "#4d9375",
                         success: "#80a665", danger: "#cb7676", contrast: 55),
+        // MPE 主题
+        ThemeDefinition(id: "mpe-atom-material", name: "Atom Material", type: .dark,
+                        surface: "#263238", ink: "#eeffff", accent: "#82aaff",
+                        success: "#c3e88d", danger: "#f07178", contrast: 55,
+                        bodyFontFamily: "'Helvetica Neue',Helvetica,'Segoe UI',Arial,freesans,sans-serif", codeFontFamily: "Menlo,Monaco,Consolas,'Courier New',monospace"),
+        ThemeDefinition(id: "mpe-gothic", name: "Gothic", type: .dark,
+                        surface: "#0e0e0e", ink: "#c7c7c7", accent: "#fe5e3a",
+                        success: "#40c977", danger: "#b33b2e", contrast: 55,
+                        bodyFontFamily: "Raleway,sans-serif", lineHeight: "1.75rem"),
+        ThemeDefinition(id: "mpe-monokai", name: "Monokai", type: .dark,
+                        surface: "#282828", ink: "#f8f8f2", accent: "#a6e22e",
+                        success: "#a6e22e", danger: "#f92672", contrast: 55,
+                        bodyFontFamily: "'Helvetica Neue',Helvetica,'Segoe UI',Arial,freesans,sans-serif", codeFontFamily: "Menlo,Monaco,Consolas,'Courier New',monospace"),
+        ThemeDefinition(id: "mpe-night", name: "Night", type: .dark,
+                        surface: "#363b40", ink: "#b8bfc6", accent: "#e0e0e0",
+                        success: "#dedede", danger: "#fa423e", contrast: 55,
+                        bodyFontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", headingFontFamily: "'Lucida Grande',Corbal,Georgia,serif", codeFontFamily: "Monaco,Consolas,'Andale Mono','DejaVu Sans Mono',monospace", letterSpacing: "-1.5px"),
+        ThemeDefinition(id: "mpe-solarized-dark", name: "Solarized Dark (MPE)", type: .dark,
+                        surface: "#002b36", ink: "#839496", accent: "#268bd2",
+                        success: "#859900", danger: "#dc322f", contrast: 55,
+                        bodyFontFamily: "'Helvetica Neue',Helvetica,'Segoe UI',Arial,freesans,sans-serif", codeFontFamily: "Menlo,Monaco,Consolas,'Courier New',monospace"),
     ]
 
-    // MARK: - 浅色主题（8 个）
-    // 来源: buddy-macos docs/theme-scheme.md 5.2 节
+    // MARK: - 浅色主题（8 个原生 + 5 个 MPE）
 
     static let lightThemes: [ThemeDefinition] = [
         ThemeDefinition(id: "buddy-light", name: "Default Light", type: .light,
@@ -106,6 +157,27 @@ enum PresetThemes {
         ThemeDefinition(id: "rose-pine-dawn", name: "Rose Pine Dawn", type: .light,
                         surface: "#faf4ed", ink: "#575279", accent: "#d7827e",
                         success: "#286983", danger: "#b4637a", contrast: 42),
+        // MPE 主题
+        ThemeDefinition(id: "mpe-atom-light", name: "Atom Light", type: .light,
+                        surface: "#ffffff", ink: "#555555", accent: "#0088cc",
+                        success: "#00a240", danger: "#ba2623", contrast: 42,
+                        bodyFontFamily: "'Helvetica Neue',Helvetica,'Segoe UI',Arial,freesans,sans-serif", codeFontFamily: "Menlo,Monaco,Consolas,'Courier New',monospace"),
+        ThemeDefinition(id: "mpe-medium", name: "Medium", type: .light,
+                        surface: "#ffffff", ink: "#333333", accent: "#1a99da",
+                        success: "#00a240", danger: "#ba2623", contrast: 42,
+                        bodyFontFamily: "'San Francisco',Roboto,'Segoe UI','Helvetica Neue','Lucida Grande',sans-serif", codeFontFamily: "Consolas,Menlo,Monaco,monospace,serif", bodyFontSize: "18px", lineHeight: "1.555", letterSpacing: "-0.003em"),
+        ThemeDefinition(id: "mpe-newsprint", name: "Newsprint", type: .light,
+                        surface: "#fbfbfb", ink: "#333333", accent: "#b05a3a",
+                        success: "#00a240", danger: "#ba2623", contrast: 42,
+                        bodyFontFamily: "'PT Serif','Times New Roman',Times", lineHeight: "1.5em"),
+        ThemeDefinition(id: "mpe-solarized-light", name: "Solarized Light (MPE)", type: .light,
+                        surface: "#fdf6e3", ink: "#657b83", accent: "#268bd2",
+                        success: "#859900", danger: "#dc322f", contrast: 42,
+                        bodyFontFamily: "'Helvetica Neue',Helvetica,'Segoe UI',Arial,freesans,sans-serif", codeFontFamily: "Menlo,Monaco,Consolas,'Courier New',monospace"),
+        ThemeDefinition(id: "mpe-vue", name: "Vue", type: .light,
+                        surface: "#ffffff", ink: "#304455", accent: "#42b983",
+                        success: "#42b983", danger: "#ba2623", contrast: 42,
+                        bodyFontFamily: "Source Sans Pro,Helvetica Neue,Arial,sans-serif", headingFontFamily: "Dosis,Source Sans Pro,Helvetica Neue,Arial,sans-serif", letterSpacing: "0"),
     ]
 
     // MARK: - 所有主题
@@ -144,9 +216,18 @@ struct ThemeCustomOverrides: Codable, Equatable, Sendable {
     var success: String?
     var danger: String?
     var contrast: Int?
+    var bodyFontFamily: String?
+    var headingFontFamily: String?
+    var codeFontFamily: String?
+    var bodyFontSize: String?
+    var lineHeight: String?
+    var letterSpacing: String?
+    var borderRadius: String?
 
     var isCustomized: Bool {
         surface != nil || ink != nil || accent != nil || success != nil || danger != nil || contrast != nil
+        || bodyFontFamily != nil || headingFontFamily != nil || codeFontFamily != nil
+        || bodyFontSize != nil || lineHeight != nil || letterSpacing != nil || borderRadius != nil
     }
 
     static let empty = ThemeCustomOverrides()
@@ -165,6 +246,13 @@ func resolveTheme(base: ThemeDefinition, custom: ThemeCustomOverrides) -> ThemeD
         accent: custom.accent ?? base.accent,
         success: custom.success ?? base.success,
         danger: custom.danger ?? base.danger,
-        contrast: custom.contrast ?? base.contrast
+        contrast: custom.contrast ?? base.contrast,
+        bodyFontFamily: custom.bodyFontFamily ?? base.bodyFontFamily,
+        headingFontFamily: custom.headingFontFamily ?? base.headingFontFamily,
+        codeFontFamily: custom.codeFontFamily ?? base.codeFontFamily,
+        bodyFontSize: custom.bodyFontSize ?? base.bodyFontSize,
+        lineHeight: custom.lineHeight ?? base.lineHeight,
+        letterSpacing: custom.letterSpacing ?? base.letterSpacing,
+        borderRadius: custom.borderRadius ?? base.borderRadius
     )
 }

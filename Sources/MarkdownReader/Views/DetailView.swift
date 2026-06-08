@@ -62,6 +62,12 @@ struct DetailView: View {
             bottomTrailingRadius: 0,
             topTrailingRadius: 0
         ))
+        .clipShape(.rect(
+            topLeadingRadius: 10,
+            bottomLeadingRadius: 10,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 0
+        ))
         .background(themeColors.bgSubtle)
         .overlay(
             LeftEdgeShape(radius: 10)
@@ -456,6 +462,7 @@ struct DetailView: View {
                     contentPadding: settings.contentPaddingPoints,
                     scrollToLine: documentViewModel.scrollToLineRequest,
                     themeCSS: themeColors.cssCustomProperties + themeColors.codeHighlightCSS,
+                    isDark: settings.resolvedThemeType == .dark,
                     onVisibleHeadingChanged: { heading in
                         activeOutlineLineNumber = heading?.lineNumber
                     }

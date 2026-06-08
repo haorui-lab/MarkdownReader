@@ -29,10 +29,19 @@ struct ThemeColors: Equatable, Sendable {
     let border: Color
     let borderSubtle: Color
 
+    // 排版变量（CSS 原始值，nil = 使用 markdown.css 默认值）
+    let bodyFontFamily: String?
+    let headingFontFamily: String?
+    let codeFontFamily: String?
+    let bodyFontSize: String?
+    let lineHeight: String?
+    let letterSpacing: String?
+    let borderRadius: String?
+
     // MARK: - CSS Custom Properties
 
     var cssCustomProperties: String {
-        """
+        var css = """
         :root {
           --surface: \(cssHex(surface));
           --ink: \(cssHex(ink));
@@ -48,8 +57,16 @@ struct ThemeColors: Equatable, Sendable {
           --accent-soft: \(cssRGBA(accentSoft));
           --border: \(cssRGBA(border));
           --border-subtle: \(cssRGBA(borderSubtle));
-        }
         """
+        if let bodyFontFamily { css += "\n  --font-body: \(bodyFontFamily);" }
+        if let headingFontFamily { css += "\n  --font-heading: \(headingFontFamily);" }
+        if let codeFontFamily { css += "\n  --font-code: \(codeFontFamily);" }
+        if let bodyFontSize { css += "\n  --font-size-base: \(bodyFontSize);" }
+        if let lineHeight { css += "\n  --line-height: \(lineHeight);" }
+        if let letterSpacing { css += "\n  --letter-spacing: \(letterSpacing);" }
+        if let borderRadius { css += "\n  --border-radius: \(borderRadius);" }
+        css += "\n}\n"
+        return css
     }
 
     private func cssHex(_ color: Color) -> String {
@@ -152,7 +169,14 @@ struct ThemeColors: Equatable, Sendable {
                 ? Color.black.mixed(with: accent, fraction: 0.20 + c * 0.08)
                 : surface.mixed(with: accent, fraction: 0.11 + c * 0.04),
             border: ink.opacity(0.06 + c * 0.04),
-            borderSubtle: ink.opacity(0.04 + c * 0.02)
+            borderSubtle: ink.opacity(0.04 + c * 0.02),
+            bodyFontFamily: theme.bodyFontFamily,
+            headingFontFamily: theme.headingFontFamily,
+            codeFontFamily: theme.codeFontFamily,
+            bodyFontSize: theme.bodyFontSize,
+            lineHeight: theme.lineHeight,
+            letterSpacing: theme.letterSpacing,
+            borderRadius: theme.borderRadius
         )
     }
 }

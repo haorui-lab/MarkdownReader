@@ -684,6 +684,12 @@ extension Color {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
 
+        // 支持 3 位 hex（#fff → #ffffff）
+        if hexSanitized.count == 3 {
+            let chars = Array(hexSanitized)
+            hexSanitized = "\(chars[0])\(chars[0])\(chars[1])\(chars[1])\(chars[2])\(chars[2])"
+        }
+
         guard hexSanitized.count == 6,
               let rgb = UInt64(hexSanitized, radix: 16) else {
             return nil

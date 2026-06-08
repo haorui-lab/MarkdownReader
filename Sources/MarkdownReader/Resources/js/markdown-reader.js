@@ -81,9 +81,12 @@
       if (mermaidBlocks.length === 0) return;
       if (typeof mermaid === 'undefined') return;
 
+      const scriptTag = document.querySelector('script[src*="markdown-reader.js"]');
+      const isDark = scriptTag ? scriptTag.dataset.isDark === 'true' : true;
+
       mermaid.initialize({
         startOnLoad: false,
-        theme: 'dark',
+        theme: isDark ? 'dark' : 'default',
         themeVariables: {
           primaryColor: 'var(--accent)',
           primaryTextColor: 'var(--ink)',

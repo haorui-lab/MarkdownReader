@@ -26,7 +26,7 @@ enum MarkdownHTMLService {
         )
     }
 
-    static func buildFullHTML(content: String, themeCSS: String, contentPadding: CGFloat, baseURL: URL?) -> String {
+    static func buildFullHTML(content: String, themeCSS: String, contentPadding: CGFloat, baseURL: URL?, isDark: Bool = true) -> String {
         let renderResult = render(content)
 
         let baseURLAttr = baseURL != nil ? " data-base-url=\"\(baseURL!.path.addingXMLAttributeEscapes)\"" : ""
@@ -39,6 +39,7 @@ enum MarkdownHTMLService {
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <link rel="stylesheet" href="mr:///css/markdown.css">
             <link rel="stylesheet" href="mr:///css/scroll.css">
+            <link rel="stylesheet" href="mr:///css/katex.min.css">
             <style id="mr-theme-style">\(themeCSS)</style>
             <style>
             :root { --content-padding: \(contentPadding)px; }
@@ -50,7 +51,14 @@ enum MarkdownHTMLService {
                     \(renderResult.html)
                 </div>
             </div>
-            <script src="mr:///js/markdown-reader.js"></script>
+            <script src="mr:///js/mermaid.min.js"></script>
+            <script src="mr:///js/katex.min.js"></script>
+            <script src="mr:///js/prism-core.min.js"></script>
+            <script src="mr:///js/prism-autoloader.min.js"></script>
+            <script>
+            Prism.plugins.autoloader.languages_path = 'mr:///js/';
+            </script>
+            <script src="mr:///js/markdown-reader.js" data-is-dark="\(isDark)"></script>
         </body>
         </html>
         """

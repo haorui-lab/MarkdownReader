@@ -38,6 +38,7 @@ struct WebViewMarkdownView: View {
     var contentPadding: CGFloat = 20
     var scrollToLine: Int?
     let themeCSS: String
+    var isDark: Bool = true
     var onVisibleHeadingChanged: ((MarkdownHTMLService.HeadingInfo?) -> Void)?
 
     @State private var page = WebPage()
@@ -123,7 +124,8 @@ struct WebViewMarkdownView: View {
             content: content,
             themeCSS: themeCSS,
             contentPadding: contentPadding,
-            baseURL: baseURL
+            baseURL: baseURL,
+            isDark: isDark
         )
 
         let renderResult = MarkdownHTMLService.render(content)

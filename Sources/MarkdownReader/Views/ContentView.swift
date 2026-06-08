@@ -321,7 +321,13 @@ struct SettingsContentView: View {
             bottomTrailingRadius: 0,
             topTrailingRadius: 0
         ))
-        .background(themeColors.bgElevated)
+        .clipShape(.rect(
+            topLeadingRadius: 10,
+            bottomLeadingRadius: 10,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 0
+        ))
+        .background(themeColors.bgSubtle)
         .overlay(
             LeftEdgeShape(radius: 10)
                 .stroke(themeColors.border, lineWidth: 1)
