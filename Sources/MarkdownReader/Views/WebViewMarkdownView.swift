@@ -128,7 +128,7 @@ struct WebViewMarkdownView: View {
             isDark: isDark
         )
 
-        let renderResult = MarkdownHTMLService.render(content)
+        let renderResult = MarkdownHTMLService.render(content, baseURL: baseURL)
         currentHeadings = renderResult.headings
 
         let effectiveBaseURL = baseURL ?? URL(string: "about:blank")!
@@ -138,7 +138,8 @@ struct WebViewMarkdownView: View {
     }
 
     private func updateContent(_ content: String) {
-        let renderResult = MarkdownHTMLService.render(content)
+        let baseURL = fileURL?.deletingLastPathComponent()
+        let renderResult = MarkdownHTMLService.render(content, baseURL: baseURL)
         currentHeadings = renderResult.headings
 
         let escapedHTML = renderResult.html

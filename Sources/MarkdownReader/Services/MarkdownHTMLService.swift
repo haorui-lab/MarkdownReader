@@ -15,10 +15,10 @@ enum MarkdownHTMLService {
         let lineNumber: Int
     }
 
-    static func render(_ markdown: String) -> RenderResult {
+    static func render(_ markdown: String, baseURL: URL? = nil) -> RenderResult {
         let preprocessed = preprocess(markdown)
         let doc = Markdown.Document(parsing: preprocessed)
-        var formatter = CustomHTMLFormatter()
+        var formatter = CustomHTMLFormatter(baseURL: baseURL)
         formatter.visit(doc)
         return RenderResult(
             html: formatter.result,
@@ -27,7 +27,7 @@ enum MarkdownHTMLService {
     }
 
     static func buildFullHTML(content: String, themeCSS: String, contentPadding: CGFloat, baseURL: URL?, isDark: Bool = true) -> String {
-        let renderResult = render(content)
+        let renderResult = render(content, baseURL: baseURL)
 
         let baseURLAttr = baseURL != nil ? " data-base-url=\"\(baseURL!.path.addingXMLAttributeEscapes)\"" : ""
 
@@ -82,6 +82,29 @@ private struct CustomHTMLFormatter: MarkupWalker {
     var result = ""
     var headings: [MarkdownHTMLService.HeadingInfo] = []
     private var headingCounter = 0
+    private let baseURL: URL?
+
+    init(baseURL: URL? = nil) {
+        self.baseURL = baseURL
+    }
+
+    /// 将相对路径转换为 mr:// 绝对路径，使其通过 URLSchemeHandler 加载
+    private func resolveRelativeURL(_ path: String) -> String {
+        guard !path.isEmpty else { return path }
+        // 已经是绝对 URL 的不做转换
+        if path.hasPrefix("http://") || path.hasPrefix("https://") ||
+           path.hasPrefix("mr://") || path.hasPrefix("data:") ||
+           path.hasPrefix("/") || path.hasPrefix("#") ||
+           path.hasPrefix("mailto:") {
+            return path
+        }
+        // 相对路径：基于 baseURL 转为 mr:// 绝对路径
+        if let baseURL = baseURL {
+            let absoluteURL = baseURL.appendingPathComponent(path)
+            return "mr:///" + absoluteURL.path
+        }
+        return path
+    }
 
     mutating func visitDocument(_ document: Markdown.Document) {
         for child in document.children {
@@ -122,19 +145,22 @@ private struct CustomHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitBlockQuote(_ blockQuote: BlockQuote) {
-        result += "<blockquote>\n"
+        let lineNumber = blockQuote.range?.lowerBound.line ?? 0
+        result += "<blockquote data-line=\"\(lineNumber)\">\n"
         descendInto(blockQuote)
         result += "</blockquote>\n"
     }
 
     mutating func visitUnorderedList(_ unorderedList: UnorderedList) {
-        result += "<ul>\n"
+        let lineNumber = unorderedList.range?.lowerBound.line ?? 0
+        result += "<ul data-line=\"\(lineNumber)\">\n"
         descendInto(unorderedList)
         result += "</ul>\n"
     }
 
     mutating func visitOrderedList(_ orderedList: OrderedList) {
-        result += "<ol>\n"
+        let lineNumber = orderedList.range?.lowerBound.line ?? 0
+        result += "<ol data-line=\"\(lineNumber)\">\n"
         descendInto(orderedList)
         result += "</ol>\n"
     }
@@ -155,7 +181,8 @@ private struct CustomHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitTable(_ table: Table) {
-        result += "<table>\n<thead>\n<tr>\n"
+        let lineNumber = table.range?.lowerBound.line ?? 0
+        result += "<table data-line=\"\(lineNumber)\">\n<thead>\n<tr>\n"
         for cell in table.head.cells {
             let align = alignmentAttr(table.columnAlignments[cell.indexInParent])
             result += "<th\(align)>"
@@ -182,7 +209,8 @@ private struct CustomHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitThematicBreak(_ thematicBreak: ThematicBreak) {
-        result += "<hr />\n"
+        let lineNumber = thematicBreak.range?.lowerBound.line ?? 0
+        result += "<hr data-line=\"\(lineNumber)\" />\n"
     }
 
     mutating func visitHTMLBlock(_ html: HTMLBlock) {
@@ -217,7 +245,8 @@ private struct CustomHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitLink(_ link: Link) {
-        let destination = link.destination?.htmlEscaped ?? ""
+        let rawDestination = link.destination?.htmlEscaped ?? ""
+        let destination = resolveRelativeURL(rawDestination)
         let title = link.title != nil ? " title=\"\(link.title!.htmlEscaped)\"" : ""
         result += "<a href=\"\(destination)\"\(title)>"
         descendInto(link)
@@ -225,7 +254,8 @@ private struct CustomHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitImage(_ image: Image) {
-        let source = image.source?.htmlEscaped ?? ""
+        let rawSource = image.source?.htmlEscaped ?? ""
+        let source = resolveRelativeURL(rawSource)
         let title = image.title != nil ? " title=\"\(image.title!.htmlEscaped)\"" : ""
         let alt = image.plainText.htmlEscaped
         result += "<img src=\"\(source)\" alt=\"\(alt)\"\(title) />"

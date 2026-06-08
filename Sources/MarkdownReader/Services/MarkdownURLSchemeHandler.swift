@@ -62,6 +62,12 @@ struct MarkdownURLSchemeHandler: URLSchemeHandler {
     }
 
     private static func resolveResourceURL(path: String, baseURL: URL?) -> URL? {
+        // 如果路径已经是绝对文件路径，直接使用
+        let absoluteURL = URL(fileURLWithPath: "/" + path)
+        if FileManager.default.fileExists(atPath: absoluteURL.path) {
+            return absoluteURL
+        }
+
         if let baseURL, FileManager.default.fileExists(atPath: baseURL.appendingPathComponent(path).path) {
             return baseURL.appendingPathComponent(path)
         }
