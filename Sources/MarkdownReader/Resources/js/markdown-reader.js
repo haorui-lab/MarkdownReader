@@ -93,11 +93,29 @@
         return resolved || v;
       };
 
+      // Canvas fillStyle converts CSS colors to #rrggbb but drops the alpha channel.
+      // For rgba() values (common in theme borders/muted text), blend with the
+      // surface background first so the result matches what users see on screen.
       const toHex = (cssColor) => {
         if (!cssColor || cssColor.startsWith('#')) return cssColor;
         const ctx = document.createElement('canvas').getContext('2d');
         ctx.fillStyle = cssColor;
-        return ctx.fillStyle;
+        const result = ctx.fillStyle;
+        // If rgba was converted to #rrggbb, alpha was lost — pre-blend it
+        if (result.startsWith('#') && cssColor.includes('rgba')) {
+          const match = cssColor.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+          if (match) {
+            const r = parseInt(match[1]), g = parseInt(match[2]), b = parseInt(match[3]), a = parseFloat(match[4]);
+            const surface = isDark ? [24, 24, 26] : [255, 255, 255];
+            const blended = [
+              Math.round(surface[0] * (1 - a) + r * a),
+              Math.round(surface[1] * (1 - a) + g * a),
+              Math.round(surface[2] * (1 - a) + b * a)
+            ];
+            return '#' + blended.map(c => c.toString(16).padStart(2, '0')).join('');
+          }
+        }
+        return result;
       };
 
       return {
@@ -153,7 +171,7 @@
         document.querySelectorAll('.mermaid-container').forEach(container => {
           const svg = container.querySelector('svg');
           if (svg) {
-            const errorEl = svg.querySelector('.error-icon, [id*="error"]');
+            const errorEl = svg.querySelector('.error-icon, .error-text');
             if (errorEl) MR._showMermaidError(container, '图表语法错误，请检查语法是否正确。');
           } else {
             const unprocessed = container.querySelector('div.mermaid:not([data-processed])');
@@ -198,7 +216,11 @@
       mermaid.run({ suppressErrors: true }).then(() => {
         if (renderId !== _mermaidRenderId) return;
         document.querySelectorAll('.mermaid-container').forEach(container => {
-          if (!container.querySelector('svg')) {
+          const svg = container.querySelector('svg');
+          if (svg) {
+            const errorEl = svg.querySelector('.error-icon, .error-text');
+            if (errorEl) MR._showMermaidError(container, '图表语法错误，请检查语法是否正确。');
+          } else {
             MR._showMermaidError(container, '图表渲染失败。');
           }
         });
