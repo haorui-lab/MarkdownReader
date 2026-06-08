@@ -463,6 +463,7 @@ struct DetailView: View {
                     content: documentViewModel.content,
                     fileURL: documentViewModel.currentFileURL,
                     contentPadding: settings.contentPaddingPoints,
+                    maxContentWidthFollowsWindow: settings.maxContentWidthFollowsWindow,
                     scrollToLine: documentViewModel.scrollToLineRequest,
                     themeCSS: themeColors.cssCustomProperties + themeColors.codeHighlightCSS,
                     isDark: settings.resolvedThemeType == .dark,

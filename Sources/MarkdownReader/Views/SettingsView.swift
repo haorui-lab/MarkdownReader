@@ -60,6 +60,16 @@ struct GeneralSettingsView: View {
 
             SettingsDivider()
 
+            // 渲染宽度
+            SettingsSection(
+                title: L10n.tr(.settingsGeneralRenderedWidthTitle, language: language),
+                description: L10n.tr(.settingsGeneralRenderedWidthDesc, language: language)
+            ) {
+                Toggle(L10n.tr(.settingsGeneralMaxWidthFollowsWindow, language: language), isOn: $settings.maxContentWidthFollowsWindow)
+            }
+
+            SettingsDivider()
+
             // 启动行为
             SettingsSection(
                 title: L10n.tr(.settingsGeneralStartupTitle, language: language)

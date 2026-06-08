@@ -26,7 +26,7 @@ enum MarkdownHTMLService {
         )
     }
 
-    static func buildFullHTML(content: String, themeCSS: String, contentPadding: CGFloat, baseURL: URL?, isDark: Bool = true) -> String {
+    static func buildFullHTML(content: String, themeCSS: String, contentPadding: CGFloat, maxContentWidthFollowsWindow: Bool = false, baseURL: URL?, isDark: Bool = true) -> String {
         let renderResult = render(content, baseURL: baseURL)
 
         let baseURLAttr = baseURL != nil ? " data-base-url=\"\(baseURL!.path.addingXMLAttributeEscapes)\"" : ""
@@ -42,7 +42,7 @@ enum MarkdownHTMLService {
             <link rel="stylesheet" href="mr:///css/katex.min.css">
             <style id="mr-theme-style">\(themeCSS)</style>
             <style>
-            :root { --content-padding: \(contentPadding)px; }
+            :root { --content-padding: \(contentPadding)px; --content-max-width: \(maxContentWidthFollowsWindow ? "none" : "980px"); }
             </style>
         </head>
         <body>

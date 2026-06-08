@@ -59,6 +59,7 @@ final class SettingsModel {
         static let enableCommandLine    = "com.markdownreader.enableCommandLine"
         static let recentItems          = "com.markdownreader.recentItems"
         static let skipFileModifiedAlert = "com.markdownreader.skipFileModifiedAlert"
+        static let maxContentWidthFollowsWindow = "com.markdownreader.maxContentWidthFollowsWindow"
         static let skippedVersion       = "com.markdownreader.skippedVersion"
         static let lastUpdateCheckTime  = "com.markdownreader.lastUpdateCheckTime"
     }
@@ -101,6 +102,11 @@ final class SettingsModel {
     /// 跳过「文件被外部修改」确认弹窗
     var skipFileModifiedAlert: Bool {
         didSet { defaults.set(skipFileModifiedAlert, forKey: Keys.skipFileModifiedAlert) }
+    }
+
+    /// 渲染视图最大宽度跟随窗口可用宽度（默认不选中，使用固定 980px）
+    var maxContentWidthFollowsWindow: Bool {
+        didSet { defaults.set(maxContentWidthFollowsWindow, forKey: Keys.maxContentWidthFollowsWindow) }
     }
 
     /// 启用命令行工具（安装 mdr 命令到 /usr/local/bin/）
@@ -298,6 +304,7 @@ final class SettingsModel {
         self.showNonMarkdownFiles = defaults.object(forKey: Keys.showNonMarkdownFiles) as? Bool ?? true
         self.isDefaultMdOpener = Self.checkIsDefaultMdOpener()
         self.skipFileModifiedAlert = defaults.object(forKey: Keys.skipFileModifiedAlert) as? Bool ?? false
+        self.maxContentWidthFollowsWindow = defaults.object(forKey: Keys.maxContentWidthFollowsWindow) as? Bool ?? false
         self.enableCommandLine = FileManager.default.fileExists(atPath: "/usr/local/bin/mdr")
         self.skippedVersion = defaults.string(forKey: Keys.skippedVersion)
         self.lastUpdateCheckTime = defaults.object(forKey: Keys.lastUpdateCheckTime) as? Date

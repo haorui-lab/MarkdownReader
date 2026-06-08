@@ -36,6 +36,7 @@ struct WebViewMarkdownView: View {
     let content: String
     let fileURL: URL?
     var contentPadding: CGFloat = 20
+    var maxContentWidthFollowsWindow: Bool = false
     var scrollToLine: Int?
     let themeCSS: String
     var isDark: Bool = true
@@ -100,6 +101,9 @@ struct WebViewMarkdownView: View {
             .onChange(of: contentPadding) { _, newValue in
                 updateContentPadding(newValue)
             }
+            .onChange(of: maxContentWidthFollowsWindow) { _, newValue in
+                updateMaxContentWidth(newValue)
+            }
             .onDisappear {
                 scrollSyncTimer?.invalidate()
             }
@@ -136,6 +140,7 @@ struct WebViewMarkdownView: View {
             content: content,
             themeCSS: themeCSS,
             contentPadding: contentPadding,
+            maxContentWidthFollowsWindow: maxContentWidthFollowsWindow,
             baseURL: baseURL,
             isDark: isDark
         )
@@ -206,6 +211,13 @@ struct WebViewMarkdownView: View {
     private func updateContentPadding(_ padding: CGFloat) {
         Task { @MainActor [padding] in
             _ = try? await page.callJavaScript("document.documentElement.style.setProperty('--content-padding', '\(padding)px')")
+        }
+    }
+
+    private func updateMaxContentWidth(_ followsWindow: Bool) {
+        let value = followsWindow ? "none" : "980px"
+        Task { @MainActor [value] in
+            _ = try? await page.callJavaScript("document.documentElement.style.setProperty('--content-max-width', '\(value)')")
         }
     }
 

@@ -34,7 +34,7 @@ body {
 }
 
 .markdown-preview {
-  max-width: 980px;
+  max-width: var(--content-max-width, 980px);
   margin: 0 auto;
   padding: var(--content-padding);
 }
