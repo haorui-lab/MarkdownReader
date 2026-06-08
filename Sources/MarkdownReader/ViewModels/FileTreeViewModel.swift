@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// 目录树视图模型，管理目录树数据和展开/折叠状态
 @MainActor

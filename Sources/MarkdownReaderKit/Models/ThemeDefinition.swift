@@ -4,27 +4,27 @@ import Foundation
 
 /// 主题定义，参照 buddy-macos 的 BuddyTheme 接口
 /// 5 个基础色 + 对比度，通过 deriveTokens() 生成完整配色方案
-struct ThemeDefinition: Identifiable, Codable, Equatable, Sendable {
-    let id: String
-    let name: String
-    let type: ThemeType
-    let surface: String   // 背景色
-    let ink: String       // 文字色
-    let accent: String    // 强调色
-    let success: String   // 成功色
-    let danger: String    // 危险色
-    let contrast: Int     // 对比度 0-100
+public struct ThemeDefinition: Identifiable, Codable, Equatable, Sendable {
+    public let id: String
+    public let name: String
+    public let type: ThemeType
+    public let surface: String   // 背景色
+    public let ink: String       // 文字色
+    public let accent: String    // 强调色
+    public let success: String   // 成功色
+    public let danger: String    // 危险色
+    public let contrast: Int     // 对比度 0-100
 
     // 排版变量（nil = 使用 markdown.css 默认值）
-    let bodyFontFamily: String?
-    let headingFontFamily: String?
-    let codeFontFamily: String?
-    let bodyFontSize: String?
-    let lineHeight: String?
-    let letterSpacing: String?
-    let borderRadius: String?
+    public let bodyFontFamily: String?
+    public let headingFontFamily: String?
+    public let codeFontFamily: String?
+    public let bodyFontSize: String?
+    public let lineHeight: String?
+    public let letterSpacing: String?
+    public let borderRadius: String?
 
-    init(id: String, name: String, type: ThemeType,
+    public init(id: String, name: String, type: ThemeType,
          surface: String, ink: String, accent: String, success: String, danger: String, contrast: Int,
          bodyFontFamily: String? = nil, headingFontFamily: String? = nil, codeFontFamily: String? = nil,
          bodyFontSize: String? = nil, lineHeight: String? = nil, letterSpacing: String? = nil,
@@ -49,7 +49,7 @@ struct ThemeDefinition: Identifiable, Codable, Equatable, Sendable {
 }
 
 /// 主题类型
-enum ThemeType: String, Codable, Sendable, CaseIterable {
+public enum ThemeType: String, Codable, Sendable, CaseIterable {
     case light
     case dark
 }
@@ -57,11 +57,11 @@ enum ThemeType: String, Codable, Sendable, CaseIterable {
 // MARK: - 预设主题
 
 /// 所有预设主题，逐字对照 buddy-macos docs/theme-scheme.md 第五节
-enum PresetThemes {
+public enum PresetThemes {
 
     // MARK: - 深色主题（15 个原生 + 4 个 MPE）
 
-    static let darkThemes: [ThemeDefinition] = [
+    public static let darkThemes: [ThemeDefinition] = [
         ThemeDefinition(id: "buddy-dark", name: "Default Dark", type: .dark,
                         surface: "#18181a", ink: "#e8e8e3", accent: "#339cff",
                         success: "#40c977", danger: "#fa423e", contrast: 60),
@@ -132,7 +132,7 @@ enum PresetThemes {
 
     // MARK: - 浅色主题（8 个原生 + 5 个 MPE）
 
-    static let lightThemes: [ThemeDefinition] = [
+    public static let lightThemes: [ThemeDefinition] = [
         ThemeDefinition(id: "buddy-light", name: "Default Light", type: .light,
                         surface: "#ffffff", ink: "#1c1c1a", accent: "#339cff",
                         success: "#00a240", danger: "#ba2623", contrast: 45),
@@ -182,22 +182,22 @@ enum PresetThemes {
 
     // MARK: - 所有主题
 
-    static let allThemes: [ThemeDefinition] = darkThemes + lightThemes
+    public static let allThemes: [ThemeDefinition] = darkThemes + lightThemes
 
     // MARK: - 查找
 
-    static func themeById(_ id: String) -> ThemeDefinition? {
+    public static func themeById(_ id: String) -> ThemeDefinition? {
         allThemes.first { $0.id == id }
     }
 
-    static func themesByType(_ type: ThemeType) -> [ThemeDefinition] {
+    public static func themesByType(_ type: ThemeType) -> [ThemeDefinition] {
         switch type {
         case .dark: darkThemes
         case .light: lightThemes
         }
     }
 
-    static func defaultTheme(for type: ThemeType) -> ThemeDefinition {
+    public static func defaultTheme(for type: ThemeType) -> ThemeDefinition {
         switch type {
         case .dark: darkThemes[0]   // Default Dark
         case .light: lightThemes[0] // Default Light
@@ -209,34 +209,34 @@ enum PresetThemes {
 
 /// 主题自定义颜色覆盖，参照 buddy-macos 的 custom 字段
 /// 只覆盖用户手动修改的颜色，未覆盖的从基础主题继承
-struct ThemeCustomOverrides: Codable, Equatable, Sendable {
-    var surface: String?
-    var ink: String?
-    var accent: String?
-    var success: String?
-    var danger: String?
-    var contrast: Int?
-    var bodyFontFamily: String?
-    var headingFontFamily: String?
-    var codeFontFamily: String?
-    var bodyFontSize: String?
-    var lineHeight: String?
-    var letterSpacing: String?
-    var borderRadius: String?
+public struct ThemeCustomOverrides: Codable, Equatable, Sendable {
+    public var surface: String?
+    public var ink: String?
+    public var accent: String?
+    public var success: String?
+    public var danger: String?
+    public var contrast: Int?
+    public var bodyFontFamily: String?
+    public var headingFontFamily: String?
+    public var codeFontFamily: String?
+    public var bodyFontSize: String?
+    public var lineHeight: String?
+    public var letterSpacing: String?
+    public var borderRadius: String?
 
-    var isCustomized: Bool {
+    public var isCustomized: Bool {
         surface != nil || ink != nil || accent != nil || success != nil || danger != nil || contrast != nil
         || bodyFontFamily != nil || headingFontFamily != nil || codeFontFamily != nil
         || bodyFontSize != nil || lineHeight != nil || letterSpacing != nil || borderRadius != nil
     }
 
-    static let empty = ThemeCustomOverrides()
+    public static let empty = ThemeCustomOverrides()
 }
 
 // MARK: - 解析后的主题
 
 /// 将基础主题与自定义覆盖合并后的完整主题
-func resolveTheme(base: ThemeDefinition, custom: ThemeCustomOverrides) -> ThemeDefinition {
+public func resolveTheme(base: ThemeDefinition, custom: ThemeCustomOverrides) -> ThemeDefinition {
     ThemeDefinition(
         id: base.id,
         name: base.name,

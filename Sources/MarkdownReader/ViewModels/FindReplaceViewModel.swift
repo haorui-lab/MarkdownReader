@@ -1,4 +1,5 @@
 import Foundation
+import MarkdownReaderKit
 
 /// 查找替换功能的搜索状态与逻辑
 /// 管理 NSRegularExpression 搜索、匹配导航、搜索选项切换

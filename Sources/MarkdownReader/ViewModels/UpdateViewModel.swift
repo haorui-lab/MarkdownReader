@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 import os
 
 /// 更新检查状态

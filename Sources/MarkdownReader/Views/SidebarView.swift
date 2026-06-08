@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// 左侧 Sidebar 目录树视图
 struct SidebarView: View {

@@ -4,43 +4,43 @@ import SwiftUI
 
 /// 从 ThemeDefinition 派生的颜色令牌，参照 buddy-macos 的 deriveTokens()
 /// 用于通过 SwiftUI Environment 传递到所有视图
-struct ThemeColors: Equatable, Sendable {
+public struct ThemeColors: Equatable, Sendable {
     // 核心色
-    let surface: Color
-    let ink: Color
-    let accent: Color
-    let success: Color
-    let danger: Color
+    public let surface: Color
+    public let ink: Color
+    public let accent: Color
+    public let success: Color
+    public let danger: Color
 
     // 派生背景色
-    let bgElevated: Color
-    let bgSubtle: Color
-    let bgMuted: Color
+    public let bgElevated: Color
+    public let bgSubtle: Color
+    public let bgMuted: Color
 
     // 派生文字色
-    let fgSecondary: Color
-    let fgMuted: Color
+    public let fgSecondary: Color
+    public let fgMuted: Color
 
     // 派生强调色
-    let accentHover: Color
-    let accentSoft: Color
+    public let accentHover: Color
+    public let accentSoft: Color
 
     // 派生边框色
-    let border: Color
-    let borderSubtle: Color
+    public let border: Color
+    public let borderSubtle: Color
 
     // 排版变量（CSS 原始值，nil = 使用 markdown.css 默认值）
-    let bodyFontFamily: String?
-    let headingFontFamily: String?
-    let codeFontFamily: String?
-    let bodyFontSize: String?
-    let lineHeight: String?
-    let letterSpacing: String?
-    let borderRadius: String?
+    public let bodyFontFamily: String?
+    public let headingFontFamily: String?
+    public let codeFontFamily: String?
+    public let bodyFontSize: String?
+    public let lineHeight: String?
+    public let letterSpacing: String?
+    public let borderRadius: String?
 
     // MARK: - CSS Custom Properties
 
-    var cssCustomProperties: String {
+    public var cssCustomProperties: String {
         var css = """
         :root {
           --surface: \(cssHex(surface));
@@ -88,7 +88,7 @@ struct ThemeColors: Equatable, Sendable {
 
     // MARK: - 代码块语法高亮主题（WebView 版）
 
-    var codeHighlightCSS: String {
+    public var codeHighlightCSS: String {
         let surfaceNS = NSColor(surface).usingColorSpace(.sRGB) ?? NSColor.black
         let inkNS = NSColor(ink).usingColorSpace(.sRGB) ?? NSColor.white
         let accentNS = NSColor(accent).usingColorSpace(.sRGB) ?? NSColor.blue
@@ -133,7 +133,7 @@ struct ThemeColors: Equatable, Sendable {
     }
 
     /// 从 ThemeDefinition 和对比度派生颜色
-    static func from(_ theme: ThemeDefinition) -> ThemeColors {
+    public static func from(_ theme: ThemeDefinition) -> ThemeColors {
         let c = Double(theme.contrast) / 100.0
         let isDark = theme.type == .dark
 
@@ -192,14 +192,14 @@ private struct ThemeColorsKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    var themeColors: ThemeColors {
+    public var themeColors: ThemeColors {
         get { self[ThemeColorsKey.self] }
         set { self[ThemeColorsKey.self] = newValue }
     }
 }
 
 extension View {
-    func applyThemeColors(_ colors: ThemeColors) -> some View {
+    public func applyThemeColors(_ colors: ThemeColors) -> some View {
         environment(\.themeColors, colors)
     }
 }
@@ -208,7 +208,7 @@ extension View {
 
 extension Color {
     /// 将两个颜色按比例混合
-    func mixed(with other: Color, fraction: Double) -> Color {
+    public func mixed(with other: Color, fraction: Double) -> Color {
         let selfNS = NSColor(self).usingColorSpace(.sRGB) ?? NSColor.black
         let otherNS = NSColor(other).usingColorSpace(.sRGB) ?? NSColor.white
         let r = selfNS.redComponent * (1 - fraction) + otherNS.redComponent * fraction
@@ -218,12 +218,12 @@ extension Color {
     }
 
     /// 变亮
-    func lighter(by amount: Double) -> Color {
+    public func lighter(by amount: Double) -> Color {
         mixed(with: .white, fraction: amount)
     }
 
     /// 变暗
-    func darker(by amount: Double) -> Color {
+    public func darker(by amount: Double) -> Color {
         mixed(with: .black, fraction: amount)
     }
 }

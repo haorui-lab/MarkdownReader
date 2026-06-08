@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// 设置标签页，供 AppViewModel 和 ContentView 使用
 enum SettingsTab: String, CaseIterable {

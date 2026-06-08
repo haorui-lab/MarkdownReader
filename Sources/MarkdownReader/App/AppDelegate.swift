@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 import os
 
 /// 应用委托，处理 macOS 应用生命周期事件

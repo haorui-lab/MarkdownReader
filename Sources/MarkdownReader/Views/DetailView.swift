@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// 仅绘制左侧边缘（含圆角）的 Shape，用于左边框描边
 struct LeftEdgeShape: Shape {
@@ -467,6 +468,11 @@ struct DetailView: View {
                     scrollToLine: documentViewModel.scrollToLineRequest,
                     themeCSS: themeColors.cssCustomProperties + themeColors.codeHighlightCSS,
                     isDark: settings.resolvedThemeType == .dark,
+                    searchQuery: findReplaceViewModel.searchText,
+                    searchCaseSensitive: findReplaceViewModel.isCaseSensitive,
+                    searchWholeWord: findReplaceViewModel.isWholeWord,
+                    searchCurrentIndex: findReplaceViewModel.currentMatchIndex,
+                    isFindBarVisible: appViewModel.isFindBarVisible,
                     onVisibleHeadingChanged: { heading in
                         activeOutlineLineNumber = heading?.lineNumber
                     },

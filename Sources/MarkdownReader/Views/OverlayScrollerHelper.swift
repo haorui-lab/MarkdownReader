@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import MarkdownReaderKit
 
 /// 强制 NSScrollView 使用 overlay（细）滚动条样式。
 /// 三级搜索策略：supervisor 链 → 兄弟视图 → 祖先区域内搜索。

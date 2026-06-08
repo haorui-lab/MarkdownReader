@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 struct FindReplaceBar: View {
     @Bindable var viewModel: FindReplaceViewModel

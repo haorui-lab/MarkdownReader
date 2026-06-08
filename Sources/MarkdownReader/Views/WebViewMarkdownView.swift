@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 import WebKit
 
 class MarkdownNavigationDecider: WebPage.NavigationDeciding {
@@ -40,6 +41,11 @@ struct WebViewMarkdownView: View {
     var scrollToLine: Int?
     let themeCSS: String
     var isDark: Bool = true
+    var searchQuery: String = ""
+    var searchCaseSensitive: Bool = false
+    var searchWholeWord: Bool = false
+    var searchCurrentIndex: Int = -1
+    var isFindBarVisible: Bool = false
     var onVisibleHeadingChanged: ((MarkdownHTMLService.HeadingInfo?) -> Void)?
     var onVisibleLineChanged: ((Int) -> Void)?
 
@@ -103,6 +109,23 @@ struct WebViewMarkdownView: View {
             }
             .onChange(of: maxContentWidthFollowsWindow) { _, newValue in
                 updateMaxContentWidth(newValue)
+            }
+            .onChange(of: searchQuery) { _, _ in
+                updateSearchHighlight()
+            }
+            .onChange(of: searchCaseSensitive) { _, _ in
+                updateSearchHighlight()
+            }
+            .onChange(of: searchWholeWord) { _, _ in
+                updateSearchHighlight()
+            }
+            .onChange(of: searchCurrentIndex) { _, newValue in
+                setSearchCurrent(newValue)
+            }
+            .onChange(of: isFindBarVisible) { _, isVisible in
+                if !isVisible {
+                    clearSearchHighlight()
+                }
             }
             .onDisappear {
                 scrollSyncTimer?.invalidate()
@@ -218,6 +241,33 @@ struct WebViewMarkdownView: View {
         let value = followsWindow ? "none" : "980px"
         Task { @MainActor [value] in
             _ = try? await page.callJavaScript("document.documentElement.style.setProperty('--content-max-width', '\(value)')")
+        }
+    }
+
+    private func updateSearchHighlight() {
+        guard isFindBarVisible else {
+            clearSearchHighlight()
+            return
+        }
+        let escapedQuery = searchQuery
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        Task { @MainActor [escapedQuery] in
+            _ = try? await page.callJavaScript("MR.highlightSearch('\(escapedQuery)', \(searchCaseSensitive), \(searchWholeWord), \(searchCurrentIndex))")
+        }
+    }
+
+    private func setSearchCurrent(_ index: Int) {
+        guard isFindBarVisible && !searchQuery.isEmpty else { return }
+        Task { @MainActor [index] in
+            _ = try? await page.callJavaScript("MR.setSearchCurrent(\(index))")
+        }
+    }
+
+    private func clearSearchHighlight() {
+        Task { @MainActor in
+            _ = try? await page.callJavaScript("MR.clearSearchHighlight()")
         }
     }
 

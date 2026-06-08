@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// 自定义红绿灯按钮（关闭/最小化/最大化），替代系统红绿灯以实现位置控制
 struct TrafficLightButtons: View {

@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// 文档视图模型，管理当前文档状态和文件读取
 @MainActor
@@ -455,10 +456,12 @@ final class DocumentViewModel {
             if let snapshot = diskContentSnapshot[url], diskContent != snapshot {
                 if !isDirty {
                     // 用户未修改过，自动静默刷新
-                    content = diskContent
+                    // 先更新快照，再设置 content，防止 didSet 中 markDirtyIfNeeded() 误判
                     diskContentSnapshot[url] = diskContent
                     contentCache[url] = diskContent
+                    content = diskContent
                     outlineItems = OutlineService.parse(diskContent)
+                    isDirty = false
                 } else {
                     // 用户有修改，显示刷新按钮
                     isFileModifiedExternally = true

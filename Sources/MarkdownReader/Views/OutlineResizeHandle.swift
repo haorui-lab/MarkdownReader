@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// 大纲侧边栏边缘拖拽分隔线
 /// 与 ResizeHandle 类似，但拖拽方向相反（向左拖 = 宽度增大）

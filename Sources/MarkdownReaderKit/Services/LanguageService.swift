@@ -3,15 +3,15 @@ import Foundation
 // MARK: - 实际语言
 
 /// 应用支持的语言，参照 buddy-macos 的 Language 类型
-enum Language: String, CaseIterable, Identifiable, Codable, Sendable {
+public enum Language: String, CaseIterable, Identifiable, Codable, Sendable {
     case zhCN = "zh-CN"
     case zhTW = "zh-TW"
     case en = "en"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
     /// 各语言的本地化显示名称（通过 L10n 渲染，避免硬编码中文）
-    func localizedName(_ language: Language) -> String {
+    public func localizedName(_ language: Language) -> String {
         switch self {
         case .zhCN: L10n.tr(.languageZhCN, language: language)
         case .zhTW: L10n.tr(.languageZhTW, language: language)
@@ -24,17 +24,17 @@ enum Language: String, CaseIterable, Identifiable, Codable, Sendable {
 
 /// 语言偏好设置，参照 buddy-macos 的 LanguagePref 类型
 /// auto 表示跟随系统语言，其余为手动指定
-enum LanguagePref: String, CaseIterable, Identifiable, Codable, Sendable {
+public enum LanguagePref: String, CaseIterable, Identifiable, Codable, Sendable {
     case auto = "auto"
     case zhCN = "zh-CN"
     case zhTW = "zh-TW"
     case en = "en"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
     /// 解析为实际语言
     /// auto 时自动检测系统语言，手动指定时直接返回对应语言
-    var resolvedLanguage: Language {
+    public var resolvedLanguage: Language {
         switch self {
         case .auto: LanguageService.detectLanguage()
         case .zhCN: .zhCN
@@ -44,7 +44,7 @@ enum LanguagePref: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 
     /// 从 LanguagePref 转换为 Language（非 auto 时）
-    var toLanguage: Language? {
+    public var toLanguage: Language? {
         Language(rawValue: rawValue)
     }
 }
@@ -53,7 +53,7 @@ enum LanguagePref: String, CaseIterable, Identifiable, Codable, Sendable {
 
 /// 语言检测服务，参照 buddy-macos 的 detectLanguage()
 /// 使用 Locale API 检测系统语言，区分简体中文和繁体中文
-enum LanguageService {
+public enum LanguageService {
 
     /// 检测系统当前语言
     /// 优先使用 Locale.current，通过 languageCode + script/region 判断
@@ -61,7 +61,7 @@ enum LanguageService {
     /// - 繁体中文：zh 且 Hant 脚本或 TW/HK/MO 地区
     /// - 英文：en
     /// - 其他：默认英文
-    static func detectLanguage() -> Language {
+    public static func detectLanguage() -> Language {
         let locale = Locale.current
         let languageCode = locale.language.languageCode?.identifier ?? ""
         let script = locale.language.script?.identifier ?? ""

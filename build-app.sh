@@ -118,6 +118,59 @@ fi
 # 创建 PkgInfo
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
+# MARK: - Quick Look Extension
+
+QL_EXT_NAME="MarkdownReaderQL"
+QL_APPEX="${APP_BUNDLE}/Contents/Extensions/${QL_EXT_NAME}.appex"
+
+mkdir -p "${QL_APPEX}/Contents/MacOS"
+mkdir -p "${QL_APPEX}/Contents/Resources"
+
+# 复制 Extension 可执行文件
+if [ -f "${BUILD_DIR}/${QL_EXT_NAME}" ]; then
+    cp "${BUILD_DIR}/${QL_EXT_NAME}" "${QL_APPEX}/Contents/MacOS/"
+    echo "📦 复制 Quick Look Extension: ${QL_EXT_NAME}"
+else
+    echo "⚠️  未找到 Quick Look Extension 可执行文件: ${BUILD_DIR}/${QL_EXT_NAME}"
+fi
+
+# 复制主应用的资源 bundle 到 Extension（Extension 运行在独立进程中，无法直接访问主 app 的资源）
+if [ -d "${BUILD_DIR}/${APP_NAME}_MarkdownReader.bundle" ]; then
+    cp -R "${BUILD_DIR}/${APP_NAME}_MarkdownReader.bundle" "${QL_APPEX}/Contents/Resources/"
+fi
+
+# 复制依赖包的资源 bundle 到 Extension
+for bundle in "${BUILD_DIR}"/*.bundle; do
+    bundle_name=$(basename "$bundle")
+    if [[ "$bundle_name" != "${APP_NAME}_MarkdownReader.bundle" ]]; then
+        cp -R "$bundle" "${QL_APPEX}/Contents/Resources/"
+    fi
+done
+
+# 生成 Extension Info.plist
+QL_PLIST_TEMPLATE="${PROJECT_DIR}/scripts/Info-QL.plist"
+if [ -f "$QL_PLIST_TEMPLATE" ]; then
+    sed "s/__VERSION__/$VERSION/g" "$QL_PLIST_TEMPLATE" > "${QL_APPEX}/Contents/Info.plist"
+    echo "📝 Quick Look Extension Info.plist 从模板生成 (版本: $VERSION)"
+else
+    echo "❌ 未找到 Quick Look Extension Info.plist 模板: $QL_PLIST_TEMPLATE"
+    exit 1
+fi
+
+# Extension PkgInfo
+echo -n "XPC????" > "${QL_APPEX}/Contents/PkgInfo"
+
+# 签名 Extension（必须在签名主 app 之前单独签名）
+if [[ -n "$SIGN_IDENTITY" ]]; then
+    echo "🔏 签名 Quick Look Extension..."
+    if $DISTRIBUTION; then
+        codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "${QL_APPEX}"
+    else
+        codesign --force --sign - "${QL_APPEX}"
+    fi
+    echo "   Quick Look Extension 已签名"
+fi
+
 # 签名
 if [[ -n "$SIGN_IDENTITY" ]]; then
     if $DISTRIBUTION; then

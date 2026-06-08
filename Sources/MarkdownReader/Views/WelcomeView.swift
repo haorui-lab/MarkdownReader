@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// 空状态占位视图，提示用户打开目录或文件
 struct WelcomeView: View {

@@ -1,15 +1,18 @@
 import Foundation
 import WebKit
 
-struct MarkdownURLSchemeHandler: URLSchemeHandler {
+public struct MarkdownURLSchemeHandler: URLSchemeHandler {
     private let baseURL: URL?
+    private let resourceSearchPaths: [URL]?
 
-    init(baseURL: URL?) {
+    public init(baseURL: URL?, resourceSearchPaths: [URL]? = nil) {
         self.baseURL = baseURL
+        self.resourceSearchPaths = resourceSearchPaths
     }
 
-    func reply(for request: URLRequest) -> some AsyncSequence<URLSchemeTaskResult, any Error> {
+    public func reply(for request: URLRequest) -> some AsyncSequence<URLSchemeTaskResult, any Error> {
         let capturedBaseURL = baseURL
+        let capturedResourceSearchPaths = resourceSearchPaths
         return AsyncThrowingStream { continuation in
             let url = request.url
             let scheme = url?.scheme
@@ -28,7 +31,7 @@ struct MarkdownURLSchemeHandler: URLSchemeHandler {
                 path = String(path.dropFirst())
             }
 
-            let resourceURL = Self.resolveResourceURL(path: path, baseURL: capturedBaseURL)
+            let resourceURL = Self.resolveResourceURL(path: path, baseURL: capturedBaseURL, resourceSearchPaths: capturedResourceSearchPaths)
 
             guard let resourceURL, FileManager.default.fileExists(atPath: resourceURL.path) else {
                 let response = HTTPURLResponse(
@@ -61,8 +64,7 @@ struct MarkdownURLSchemeHandler: URLSchemeHandler {
         }
     }
 
-    private static func resolveResourceURL(path: String, baseURL: URL?) -> URL? {
-        // 如果路径已经是绝对文件路径，直接使用
+    private static func resolveResourceURL(path: String, baseURL: URL?, resourceSearchPaths: [URL]?) -> URL? {
         let absoluteURL = URL(fileURLWithPath: "/" + path)
         if FileManager.default.fileExists(atPath: absoluteURL.path) {
             return absoluteURL
@@ -72,16 +74,17 @@ struct MarkdownURLSchemeHandler: URLSchemeHandler {
             return baseURL.appendingPathComponent(path)
         }
 
-        // 在 .app 包内搜索资源，不依赖 Bundle.module（其 fatalError 不可恢复）
-        // 搜索顺序：
-        //   1. Contents/Resources/MarkdownReader_MarkdownReader.bundle/Resources/{path} （正确结构）
-        //   2. Contents/Resources/Resources/{path} （bundle 被展开的情况）
-        //   3. Contents/Resources/{path} （bundle 内容被直接展开到 Resources 的情况）
-        let searchPaths: [URL] = [
-            Bundle.main.resourceURL?.appendingPathComponent("MarkdownReader_MarkdownReader.bundle").appendingPathComponent("Resources").appendingPathComponent(path),
-            Bundle.main.resourceURL?.appendingPathComponent("Resources").appendingPathComponent(path),
-            Bundle.main.resourceURL?.appendingPathComponent(path),
-        ].compactMap { $0 }
+        var searchPaths: [URL] = []
+
+        if let customPaths = resourceSearchPaths {
+            searchPaths = customPaths.map { $0.appendingPathComponent(path) }
+        } else {
+            searchPaths = [
+                Bundle.main.resourceURL?.appendingPathComponent("MarkdownReader_MarkdownReader.bundle").appendingPathComponent("Resources").appendingPathComponent(path),
+                Bundle.main.resourceURL?.appendingPathComponent("Resources").appendingPathComponent(path),
+                Bundle.main.resourceURL?.appendingPathComponent(path),
+            ].compactMap { $0 }
+        }
 
         for url in searchPaths {
             if FileManager.default.fileExists(atPath: url.path) {

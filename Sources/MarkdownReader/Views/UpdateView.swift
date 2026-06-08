@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// 自动更新弹窗视图
 /// 显示版本信息、release notes、下载进度，提供跳过/稍后/下载/安装操作

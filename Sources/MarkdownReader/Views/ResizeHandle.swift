@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// Sidebar 边缘拖拽分隔线
 /// 使用 NSViewRepresentable 直接处理鼠标事件，避免 SwiftUI DragGesture 在 macOS 上不可靠的问题

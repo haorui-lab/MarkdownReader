@@ -42,8 +42,10 @@
       const content = document.getElementById('mr-content');
       if (content) {
         content.innerHTML = html;
+        MR._searchHighlights = [];
         MR.renderMermaid();
         MR.renderKaTeX();
+        MR.renderAdmonitions();
         if (typeof Prism !== 'undefined') {
           Prism.highlightAll();
         }
@@ -222,33 +224,205 @@
     },
 
     renderKaTeX() {
-      const mathBlocks = document.querySelectorAll('code.language-math, code.language-latex, code.language-katex');
-      if (mathBlocks.length === 0) return;
+      const mathElements = document.querySelectorAll('code.language-math, code.language-latex, code.language-katex');
+      if (mathElements.length === 0) return;
       if (typeof katex === 'undefined') return;
 
-      mathBlocks.forEach(block => {
+      mathElements.forEach(block => {
         const pre = block.parentElement;
-        if (!pre || pre.tagName !== 'PRE') return;
+        const isInline = !pre || pre.tagName !== 'PRE';
         const mathContent = block.textContent;
-        const isDisplay = true;
-        const container = document.createElement('div');
-        container.className = isDisplay ? 'katex-display' : 'katex-inline';
-        try {
-          katex.render(mathContent, container, {
-            displayMode: isDisplay,
-            throwOnError: false,
-            output: 'html'
-          });
-        } catch (e) {
-          container.textContent = mathContent;
+
+        if (isInline) {
+          const span = document.createElement('span');
+          span.className = 'katex-inline';
+          try {
+            katex.render(mathContent, span, {
+              displayMode: false,
+              throwOnError: false,
+              output: 'html'
+            });
+          } catch (e) {
+            span.textContent = mathContent;
+          }
+          block.replaceWith(span);
+        } else {
+          const container = document.createElement('div');
+          container.className = 'katex-display';
+          try {
+            katex.render(mathContent, container, {
+              displayMode: true,
+              throwOnError: false,
+              output: 'html'
+            });
+          } catch (e) {
+            container.textContent = mathContent;
+          }
+          pre.replaceWith(container);
         }
-        pre.replaceWith(container);
       });
+    },
+
+    renderAdmonitions() {
+      const blockquotes = document.querySelectorAll('blockquote');
+      const types = {
+        'note': { icon: 'ℹ', label: 'Note' },
+        'tip': { icon: '💡', label: 'Tip' },
+        'warning': { icon: '⚠', label: 'Warning' },
+        'caution': { icon: '🔥', label: 'Caution' },
+        'important': { icon: '❗', label: 'Important' }
+      };
+      blockquotes.forEach(bq => {
+        const firstP = bq.querySelector('p');
+        if (!firstP) return;
+        const text = firstP.textContent.trim();
+        for (const [type, config] of Object.entries(types)) {
+          const prefix = '[' + type.charAt(0).toUpperCase() + type.slice(1) + ']';
+          if (text.startsWith(prefix)) {
+            bq.classList.add('admonition', 'admonition-' + type);
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'admonition-title';
+            titleSpan.textContent = config.label;
+            const rest = text.slice(prefix.length).trim();
+            if (rest) {
+              firstP.textContent = rest;
+            } else {
+              firstP.remove();
+            }
+            bq.insertBefore(titleSpan, bq.firstChild);
+            break;
+          }
+        }
+      });
+    },
+
+    _searchHighlights: [],
+
+    highlightSearch(query, caseSensitive, wholeWord, currentIndex) {
+      MR.clearSearchHighlight();
+      if (!query) return 0;
+
+      const content = document.getElementById('mr-content');
+      if (!content) return 0;
+
+      const flags = caseSensitive ? 'g' : 'gi';
+      let pattern = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (wholeWord) pattern = '\\b' + pattern + '\\b';
+
+      let regex;
+      try {
+        regex = new RegExp(pattern, flags);
+      } catch (e) {
+        return 0;
+      }
+
+      const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, null);
+      const textNodes = [];
+      while (walker.nextNode()) {
+        textNodes.push(walker.currentNode);
+      }
+
+      const allMatches = [];
+
+      textNodes.forEach(node => {
+        const text = node.textContent;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+          allMatches.push({
+            node: node,
+            index: match.index,
+            length: match[0].length
+          });
+        }
+      });
+
+      // Sort by document position in REVERSE order for safe insertion.
+      // Processing from end to start prevents surroundContents from
+      // splitting text nodes and invalidating later match offsets.
+      const sortedAllMatches = allMatches.slice().sort((a, b) => {
+        const cmp = a.node.compareDocumentPosition(b.node);
+        if (cmp & Node.DOCUMENT_POSITION_FOLLOWING) return 1;  // b comes first → process b before a
+        if (cmp & Node.DOCUMENT_POSITION_PRECEDING) return -1; // a comes first → process a before b
+        return b.index - a.index; // same node: higher index first
+      });
+
+      // Collect mark elements in document order for indexing
+      const markElements = [];
+
+      // Use Range API to wrap matches in <mark> elements
+      for (const m of sortedAllMatches) {
+        const range = document.createRange();
+        try {
+          range.setStart(m.node, m.index);
+          range.setEnd(m.node, m.index + m.length);
+        } catch (e) {
+          continue;
+        }
+
+        const mark = document.createElement('mark');
+        mark.className = 'mr-search-highlight';
+
+        try {
+          range.surroundContents(mark);
+          markElements.unshift(mark); // prepend to maintain document order
+        } catch (e) {
+          // surroundContents fails when range crosses element boundaries — skip
+          continue;
+        }
+      }
+
+      // Assign sequential indices in document order
+      markElements.forEach((mark, i) => {
+        mark.dataset.searchIndex = i;
+      });
+      MR._searchHighlights = markElements;
+
+      const matchCount = markElements.length;
+
+      // Highlight current match
+      if (currentIndex >= 0 && currentIndex < matchCount) {
+        const currentMark = content.querySelector(`mark[data-search-index="${currentIndex}"]`);
+        if (currentMark) {
+          currentMark.classList.add('mr-search-current');
+          currentMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+
+      return matchCount;
+    },
+
+    setSearchCurrent(currentIndex) {
+      const content = document.getElementById('mr-content');
+      if (!content) return;
+      const prev = content.querySelector('.mr-search-current');
+      if (prev) prev.classList.remove('mr-search-current');
+      if (currentIndex >= 0) {
+        const mark = content.querySelector(`mark[data-search-index="${currentIndex}"]`);
+        if (mark) {
+          mark.classList.add('mr-search-current');
+          mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    },
+
+    clearSearchHighlight() {
+      for (const mark of MR._searchHighlights) {
+        const parent = mark.parentNode;
+        if (parent) {
+          while (mark.firstChild) {
+            parent.insertBefore(mark.firstChild, mark);
+          }
+          parent.removeChild(mark);
+          parent.normalize();
+        }
+      }
+      MR._searchHighlights = [];
     },
 
     init() {
       MR.renderMermaid();
       MR.renderKaTeX();
+      MR.renderAdmonitions();
       if (typeof Prism !== 'undefined') {
         Prism.highlightAll();
       }

@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 import UniformTypeIdentifiers
 
 /// 最近打开的文件/目录记录
@@ -62,6 +63,7 @@ final class SettingsModel {
         static let maxContentWidthFollowsWindow = "com.markdownreader.maxContentWidthFollowsWindow"
         static let skippedVersion       = "com.markdownreader.skippedVersion"
         static let lastUpdateCheckTime  = "com.markdownreader.lastUpdateCheckTime"
+        static let enableQuickLookPreview = "com.markdownreader.enableQuickLookPreview"
     }
 
     private let defaults = UserDefaults.standard
@@ -112,6 +114,11 @@ final class SettingsModel {
     /// 启用命令行工具（安装 mdr 命令到 /usr/local/bin/）
     var enableCommandLine: Bool {
         didSet { defaults.set(enableCommandLine, forKey: Keys.enableCommandLine) }
+    }
+
+    /// 启用 Quick Look 预览（在 Finder 中按空格键预览 Markdown 文件）
+    var enableQuickLookPreview: Bool {
+        didSet { defaults.set(enableQuickLookPreview, forKey: Keys.enableQuickLookPreview) }
     }
 
     // MARK: - 自动更新
@@ -306,6 +313,7 @@ final class SettingsModel {
         self.skipFileModifiedAlert = defaults.object(forKey: Keys.skipFileModifiedAlert) as? Bool ?? false
         self.maxContentWidthFollowsWindow = defaults.object(forKey: Keys.maxContentWidthFollowsWindow) as? Bool ?? false
         self.enableCommandLine = FileManager.default.fileExists(atPath: "/usr/local/bin/mdr")
+        self.enableQuickLookPreview = defaults.object(forKey: Keys.enableQuickLookPreview) as? Bool ?? true
         self.skippedVersion = defaults.string(forKey: Keys.skippedVersion)
         self.lastUpdateCheckTime = defaults.object(forKey: Keys.lastUpdateCheckTime) as? Date
         self.appearanceMode = AppearanceMode(rawValue: defaults.string(forKey: Keys.appearanceMode) ?? "") ?? .system

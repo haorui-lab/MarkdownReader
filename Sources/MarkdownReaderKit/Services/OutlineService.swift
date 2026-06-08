@@ -1,12 +1,12 @@
 import Foundation
 
 /// Markdown 大纲解析服务，从 Markdown 文本中提取标题结构
-enum OutlineService {
+public enum OutlineService {
 
     /// 解析 Markdown 内容，返回大纲项列表
     /// - Parameter content: Markdown 原始文本
     /// - Returns: 按出现顺序排列的大纲项
-    static func parse(_ content: String) -> [OutlineItem] {
+    public static func parse(_ content: String) -> [OutlineItem] {
         var items: [OutlineItem] = []
         let lines = content.components(separatedBy: "\n")
         var isInCodeBlock = false

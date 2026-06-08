@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 // MARK: - 设置视图组件
 
@@ -131,6 +132,19 @@ struct GeneralSettingsView: View {
                         Text(L10n.tr(.settingsGeneralSetDefaultFailed, language: language))
                     }
                 }
+            }
+
+            SettingsDivider()
+
+            // Quick Look 预览
+            SettingsSection(
+                title: L10n.tr(.settingsGeneralQuickLookTitle, language: language),
+                description: L10n.tr(.settingsGeneralQuickLookDesc, language: language)
+            ) {
+                Toggle(
+                    L10n.tr(.settingsGeneralQuickLookEnabled, language: language),
+                    isOn: $settings.enableQuickLookPreview
+                )
             }
 
             SettingsDivider()

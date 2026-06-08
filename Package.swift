@@ -10,6 +10,10 @@ let package = Package(
         .executable(
             name: "MarkdownReader",
             targets: ["MarkdownReader"]
+        ),
+        .executable(
+            name: "MarkdownReaderQL",
+            targets: ["MarkdownReaderQL"]
         )
     ],
     dependencies: [
@@ -19,9 +23,19 @@ let package = Package(
         )
     ],
     targets: [
+        // Shared library — rendering logic, theme, localization
+        .target(
+            name: "MarkdownReaderKit",
+            dependencies: [
+                .product(name: "Markdown", package: "swift-markdown")
+            ],
+            path: "Sources/MarkdownReaderKit"
+        ),
+        // Main application
         .executableTarget(
             name: "MarkdownReader",
             dependencies: [
+                "MarkdownReaderKit",
                 .product(name: "Markdown", package: "swift-markdown")
             ],
             path: "Sources/MarkdownReader",
@@ -29,6 +43,14 @@ let package = Package(
                 .process("Assets.xcassets"),
                 .copy("Resources")
             ]
+        ),
+        // Quick Look Preview Extension
+        .executableTarget(
+            name: "MarkdownReaderQL",
+            dependencies: [
+                "MarkdownReaderKit"
+            ],
+            path: "Sources/MarkdownReaderQL"
         )
     ]
 )

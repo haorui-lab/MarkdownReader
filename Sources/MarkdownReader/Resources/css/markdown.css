@@ -224,6 +224,10 @@ input[type="checkbox"]:checked {
   overflow-y: hidden;
 }
 
+.katex-inline {
+  display: inline;
+}
+
 details {
   margin-bottom: 16px;
 }
@@ -245,5 +249,55 @@ mark {
 }
 
 .footnote-ref { font-size: 0.85em; }
-.footnotes { font-size: 0.9em; color: var(--fg-secondary); }
+.footnote-ref a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.footnotes {
+  font-size: 0.9em;
+  color: var(--fg-secondary);
+  border-top: 1px solid var(--border);
+  margin-top: 32px;
+  padding-top: 16px;
+}
 .footnotes ol { padding-left: 1.5em; }
+.footnotes li { margin-bottom: 4px; }
+.footnote-backref {
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+.footnote-backref:hover {
+  color: var(--accent);
+}
+
+.admonition {
+  margin: 0 0 16px 0;
+  padding: 12px 16px;
+  border-left: 4px solid var(--accent);
+  border-radius: var(--border-radius);
+  background: var(--accent-soft);
+}
+
+.admonition-title {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+
+.admonition-note { border-left-color: var(--accent); background: var(--accent-soft); }
+.admonition-tip { border-left-color: var(--success); background: var(--bg-subtle); }
+.admonition-warning { border-left-color: #e0a800; background: var(--bg-subtle); }
+.admonition-caution { border-left-color: var(--danger); background: var(--bg-subtle); }
+.admonition-important { border-left-color: var(--accent); background: var(--accent-soft); }
+
+.mr-search-highlight {
+  background: rgba(255, 166, 0, 0.3);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.mr-search-current {
+  background: rgba(255, 166, 0, 0.6);
+}

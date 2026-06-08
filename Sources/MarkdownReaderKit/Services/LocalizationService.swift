@@ -4,12 +4,12 @@ import SwiftUI
 
 /// 简易本地化服务，参照 buddy-macos 的 i18n 字典方案
 /// 使用扁平 key-value 结构，支持插值 {n}
-enum L10n {
+public enum L10n {
 
     // MARK: - Key 定义
 
     /// 所有本地化键，与 buddy-macos 的 settings key 结构对齐
-    enum Key: String, CaseIterable, Sendable {
+    public enum Key: String, CaseIterable, Sendable {
         // 应用名称
         case appName
 
@@ -54,6 +54,11 @@ enum L10n {
         case settingsGeneralCommandLineInstalled
         case settingsGeneralCommandLineInstallFailed
         case settingsGeneralCommandLineUninstallFailed
+
+        // 设置 - Quick Look 预览
+        case settingsGeneralQuickLookTitle
+        case settingsGeneralQuickLookDesc
+        case settingsGeneralQuickLookEnabled
 
         // 设置 - 外观 - 主题模式
         case settingsAppearanceThemeTitle
@@ -242,6 +247,9 @@ enum L10n {
         .settingsGeneralCommandLineInstalled: "mdr command is available in Terminal",
         .settingsGeneralCommandLineInstallFailed: "Failed to install command line tool. Please try again.",
         .settingsGeneralCommandLineUninstallFailed: "Failed to uninstall command line tool. Please try again.",
+        .settingsGeneralQuickLookTitle: "Quick Look Preview",
+        .settingsGeneralQuickLookDesc: "Enable Markdown rendering in Finder Quick Look (press Space to preview).",
+        .settingsGeneralQuickLookEnabled: "Enable Quick Look preview",
         .settingsAppearanceThemeTitle: "Theme",
         .settingsAppearanceThemeDesc: "Choose the application appearance mode.",
         .settingsAppearanceModeLight: "Light",
@@ -386,6 +394,9 @@ enum L10n {
         .settingsGeneralCommandLineInstalled: "mdr 命令已在终端中可用",
         .settingsGeneralCommandLineInstallFailed: "安装命令行工具失败，请重试。",
         .settingsGeneralCommandLineUninstallFailed: "卸载命令行工具失败，请重试。",
+        .settingsGeneralQuickLookTitle: "Quick Look 预览",
+        .settingsGeneralQuickLookDesc: "在 Finder 中按空格键预览 Markdown 文件的渲染效果。",
+        .settingsGeneralQuickLookEnabled: "启用 Quick Look 预览",
         .settingsAppearanceThemeTitle: "主题",
         .settingsAppearanceThemeDesc: "选择应用的外观模式。",
         .settingsAppearanceModeLight: "浅色",
@@ -530,6 +541,9 @@ enum L10n {
         .settingsGeneralCommandLineInstalled: "mdr 命令已在終端機中可用",
         .settingsGeneralCommandLineInstallFailed: "安裝命令列工具失敗，請重試。",
         .settingsGeneralCommandLineUninstallFailed: "解除安裝命令列工具失敗，請重試。",
+        .settingsGeneralQuickLookTitle: "Quick Look 預覽",
+        .settingsGeneralQuickLookDesc: "在 Finder 中按空白鍵預覽 Markdown 檔案的渲染效果。",
+        .settingsGeneralQuickLookEnabled: "啟用 Quick Look 預覽",
         .settingsAppearanceThemeTitle: "主題",
         .settingsAppearanceThemeDesc: "選擇應用的外觀模式。",
         .settingsAppearanceModeLight: "淺色",
@@ -656,11 +670,11 @@ enum L10n {
         }
     }
 
-    static func tr(_ key: Key, language: Language) -> String {
+    public static func tr(_ key: Key, language: Language) -> String {
         dictionary(for: language)[key] ?? key.rawValue
     }
 
-    static func tr(_ key: Key, language: Language, args: [String: String]) -> String {
+    public static func tr(_ key: Key, language: Language, args: [String: String]) -> String {
         var result = tr(key, language: language)
         for (k, v) in args {
             result = result.replacingOccurrences(of: "{\(k)}", with: v)
@@ -676,14 +690,14 @@ private struct LanguageEnvironmentKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    var language: Language {
+    public var language: Language {
         get { self[LanguageEnvironmentKey.self] }
         set { self[LanguageEnvironmentKey.self] = newValue }
     }
 }
 
 extension View {
-    func withLanguage(_ language: Language) -> some View {
+    public func withLanguage(_ language: Language) -> some View {
         environment(\.language, language)
     }
 }

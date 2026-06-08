@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// 主视图，管理自定义 HStack 两列布局
 /// 设置模式下左侧显示设置菜单，右侧显示设置内容
@@ -132,14 +133,19 @@ struct ContentView: View {
                 SettingsContentView(appViewModel: appViewModel, settings: settings)
             } else {
                 // 正常模式：文件树 + 文档
-                if appViewModel.isSidebarVisible {
-                    SidebarView(
-                        fileTreeViewModel: fileTreeViewModel,
-                        appViewModel: appViewModel,
-                        documentViewModel: documentViewModel
-                    )
-                    .frame(width: appViewModel.sidebarWidth)
+                // SidebarView 始终保留在视图树中，通过宽度 0 + clipping 隐藏，
+                // 避免条件 if 导致 NSView 后端反复销毁/重建，引发 AppKit hit-testing
+                // 与 SwiftUI 布局不同步（标题栏拖拽区域吞噬按钮点击）
+                SidebarView(
+                    fileTreeViewModel: fileTreeViewModel,
+                    appViewModel: appViewModel,
+                    documentViewModel: documentViewModel
+                )
+                .frame(width: appViewModel.isSidebarVisible ? appViewModel.sidebarWidth : 0)
+                .clipped()
+                .allowsHitTesting(appViewModel.isSidebarVisible)
 
+                if appViewModel.isSidebarVisible {
                     ResizeHandle(appViewModel: appViewModel)
                         .background(themeColors.bgSubtle)
                 }

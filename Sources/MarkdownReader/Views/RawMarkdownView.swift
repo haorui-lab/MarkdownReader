@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 
 /// Markdown 原始文本视图，使用 NSTextView 实现语法高亮着色
 /// 像 VS Code / Sublime Text 一样对 Markdown 语法元素进行着色渲染

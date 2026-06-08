@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownReaderKit
 import UniformTypeIdentifiers
 
 /// 打开面板工具，提供统一的 NSOpenPanel / NSSavePanel 调用逻辑
