@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
@@ -14,19 +14,20 @@ let package = Package(
     ],
     dependencies: [
         .package(
-            url: "https://github.com/gonzalezreal/textual.git",
-            .upToNextMinor(from: "0.3.1")
+            url: "https://github.com/apple/swift-markdown.git",
+            from: "0.5.0"
         )
     ],
     targets: [
         .executableTarget(
             name: "MarkdownReader",
             dependencies: [
-                .product(name: "Textual", package: "textual")
+                .product(name: "Markdown", package: "swift-markdown")
             ],
             path: "Sources/MarkdownReader",
             resources: [
-                .process("Assets.xcassets")
+                .process("Assets.xcassets"),
+                .copy("Resources")
             ]
         )
     ]

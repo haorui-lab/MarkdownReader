@@ -4,6 +4,7 @@ import SwiftUI
 struct OutlineView: View {
     let items: [OutlineItem]
     let onSelect: (OutlineItem) -> Void
+    var activeLineNumber: Int?
     @Environment(\.themeColors) private var themeColors
     @Environment(\.language) private var language
 
@@ -104,7 +105,7 @@ struct OutlineView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .hoverBackground(themeColors: themeColors)
+        .hoverBackground(themeColors: themeColors, isActive: item.lineNumber == activeLineNumber)
     }
 
     // MARK: - 样式辅助
@@ -134,19 +135,19 @@ struct OutlineView: View {
 /// 自定义 ButtonStyle，鼠标悬停时显示背景色
 private struct HoverBackgroundButtonStyle: ButtonStyle {
     let themeColors: ThemeColors
+    var isActive: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(configuration.isPressed ? themeColors.bgMuted : Color.clear)
+                    .fill(isActive ? themeColors.accentSoft : (configuration.isPressed ? themeColors.bgMuted : Color.clear))
             )
     }
 }
 
 extension View {
-    /// 应用悬停背景效果
-    func hoverBackground(themeColors: ThemeColors) -> some View {
-        self.buttonStyle(HoverBackgroundButtonStyle(themeColors: themeColors))
+    func hoverBackground(themeColors: ThemeColors, isActive: Bool = false) -> some View {
+        self.buttonStyle(HoverBackgroundButtonStyle(themeColors: themeColors, isActive: isActive))
     }
 }

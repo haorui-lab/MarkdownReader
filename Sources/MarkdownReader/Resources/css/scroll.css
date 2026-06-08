@@ -1,0 +1,45 @@
+.markdown-preview [data-sourcepos] {
+  position: relative;
+}
+
+.markdown-preview h1[id],
+.markdown-preview h2[id],
+.markdown-preview h3[id],
+.markdown-preview h4[id],
+.markdown-preview h5[id],
+.markdown-preview h6[id] {
+  scroll-margin-top: 20px;
+}
+
+.markdown-preview .outline-highlight {
+  background: var(--accent-soft);
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+.markdown-preview .outline-highlight.fade-out {
+  background: transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-muted);
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
+}

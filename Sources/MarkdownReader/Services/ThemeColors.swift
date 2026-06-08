@@ -1,5 +1,4 @@
 import SwiftUI
-import Textual
 
 // MARK: - 主题颜色令牌
 
@@ -30,11 +29,49 @@ struct ThemeColors: Equatable, Sendable {
     let border: Color
     let borderSubtle: Color
 
-    // MARK: - 代码块语法高亮主题
+    // MARK: - CSS Custom Properties
 
-    /// 从当前主题色派生 Textual 语法高亮主题
-    /// 使用单色 DynamicColor（非 light/dark 双色），确保颜色匹配应用主题而非系统外观
-    var highlighterTheme: StructuredText.HighlighterTheme {
+    var cssCustomProperties: String {
+        """
+        :root {
+          --surface: \(cssHex(surface));
+          --ink: \(cssHex(ink));
+          --accent: \(cssHex(accent));
+          --success: \(cssHex(success));
+          --danger: \(cssHex(danger));
+          --bg-elevated: \(cssHex(bgElevated));
+          --bg-subtle: \(cssHex(bgSubtle));
+          --bg-muted: \(cssHex(bgMuted));
+          --fg-secondary: \(cssRGBA(fgSecondary));
+          --fg-muted: \(cssRGBA(fgMuted));
+          --accent-hover: \(cssHex(accentHover));
+          --accent-soft: \(cssRGBA(accentSoft));
+          --border: \(cssRGBA(border));
+          --border-subtle: \(cssRGBA(borderSubtle));
+        }
+        """
+    }
+
+    private func cssHex(_ color: Color) -> String {
+        let nsColor = NSColor(color).usingColorSpace(.sRGB) ?? NSColor.black
+        let r = Int(nsColor.redComponent * 255)
+        let g = Int(nsColor.greenComponent * 255)
+        let b = Int(nsColor.blueComponent * 255)
+        return String(format: "#%02x%02x%02x", r, g, b)
+    }
+
+    private func cssRGBA(_ color: Color) -> String {
+        let nsColor = NSColor(color).usingColorSpace(.sRGB) ?? NSColor.black
+        let r = Int(nsColor.redComponent * 255)
+        let g = Int(nsColor.greenComponent * 255)
+        let b = Int(nsColor.blueComponent * 255)
+        let a = nsColor.alphaComponent
+        return "rgba(\(r), \(g), \(b), \(String(format: "%.2f", a)))"
+    }
+
+    // MARK: - 代码块语法高亮主题（WebView 版）
+
+    var codeHighlightCSS: String {
         let surfaceNS = NSColor(surface).usingColorSpace(.sRGB) ?? NSColor.black
         let inkNS = NSColor(ink).usingColorSpace(.sRGB) ?? NSColor.white
         let accentNS = NSColor(accent).usingColorSpace(.sRGB) ?? NSColor.blue
@@ -43,65 +80,39 @@ struct ThemeColors: Equatable, Sendable {
 
         let isDark = surfaceNS.perceivedBrightness < inkNS.perceivedBrightness
 
-        let codeForeground = DynamicColor(isDark
-            ? ink.opacity(0.85)
-            : ink.opacity(0.88))
+        let codeFg = isDark ? cssHex(ink.opacity(0.85)) : cssHex(ink.opacity(0.88))
+        let codeBg = isDark
+            ? cssHex(surface.mixed(with: ink, fraction: 0.06))
+            : cssHex(surface.mixed(with: ink, fraction: 0.04))
+        let keyword = cssHex(accent)
+        let string = isDark ? cssHex(success.lighter(by: 0.15)) : cssHex(Color(nsColor: successNS.blended(with: 0.15, of: inkNS) ?? successNS))
+        let number = cssHex(Color(nsColor: accentNS.blended(with: 0.25, of: dangerNS) ?? accentNS))
+        let comment = cssRGBA(fgMuted)
+        let functionName = cssHex(Color(nsColor: accentNS.blended(with: 0.4, of: inkNS) ?? accentNS))
+        let variable = cssHex(Color(nsColor: inkNS.blended(with: 0.15, of: successNS) ?? inkNS))
+        let className = cssHex(success)
+        let tag = cssHex(Color(nsColor: accentNS.blended(with: 0.4, of: successNS) ?? accentNS))
+        let attr = cssHex(Color(nsColor: accentNS.blended(with: 0.3, of: dangerNS) ?? accentNS))
+        let deleted = cssHex(danger)
+        let inserted = cssHex(success)
 
-        let codeBackground = DynamicColor(isDark
-            ? surface.mixed(with: ink, fraction: 0.06)
-            : surface.mixed(with: ink, fraction: 0.04))
-
-        let keywordColor = DynamicColor(accent)
-        let builtinColor = DynamicColor(Color(nsColor: accentNS.blended(with: 0.3, of: inkNS) ?? accentNS))
-        let stringColor = DynamicColor(isDark
-            ? success.lighter(by: 0.15)
-            : Color(nsColor: successNS.blended(with: 0.15, of: inkNS) ?? successNS))
-        let charColor = DynamicColor(Color(nsColor: accentNS.blended(with: 0.4, of: successNS) ?? accentNS))
-        let numberColor = DynamicColor(Color(nsColor: accentNS.blended(with: 0.25, of: dangerNS) ?? accentNS))
-        let classColor = DynamicColor(success)
-        let functionColor = DynamicColor(Color(nsColor: accentNS.blended(with: 0.4, of: inkNS) ?? accentNS))
-        let variableColor = DynamicColor(Color(nsColor: inkNS.blended(with: 0.15, of: successNS) ?? inkNS))
-        let commentColor = DynamicColor(fgMuted)
-        let preprocessorColor = DynamicColor(Color(nsColor: dangerNS.blended(with: 0.3, of: accentNS) ?? dangerNS))
-        let attributeColor = DynamicColor(Color(nsColor: accentNS.blended(with: 0.3, of: dangerNS) ?? accentNS))
-        let urlColor = DynamicColor(accent)
-        let insertedColor = DynamicColor(success)
-        let deletedColor = DynamicColor(danger)
-        let markColor = DynamicColor(fgSecondary)
-
-        return StructuredText.HighlighterTheme(
-            foregroundColor: codeForeground,
-            backgroundColor: codeBackground,
-            tokenProperties: [
-                .keyword: AnyTextProperty(.foregroundColor(keywordColor), .fontWeight(.semibold)),
-                .builtin: AnyTextProperty(.foregroundColor(builtinColor)),
-                .literal: AnyTextProperty(.foregroundColor(keywordColor), .fontWeight(.semibold)),
-                .string: AnyTextProperty(.foregroundColor(stringColor)),
-                .char: AnyTextProperty(.foregroundColor(charColor)),
-                .regex: AnyTextProperty(.foregroundColor(stringColor)),
-                .url: AnyTextProperty(.foregroundColor(urlColor)),
-                .number: AnyTextProperty(.foregroundColor(numberColor)),
-                .symbol: AnyTextProperty(.foregroundColor(codeForeground)),
-                .boolean: AnyTextProperty(.foregroundColor(keywordColor), .fontWeight(.semibold)),
-                .className: AnyTextProperty(.foregroundColor(classColor)),
-                .function: AnyTextProperty(.foregroundColor(functionColor)),
-                .functionName: AnyTextProperty(.foregroundColor(functionColor)),
-                .variable: AnyTextProperty(.foregroundColor(variableColor)),
-                .constant: AnyTextProperty(.foregroundColor(variableColor)),
-                .property: AnyTextProperty(.foregroundColor(variableColor)),
-                .comment: AnyTextProperty(.foregroundColor(commentColor)),
-                .blockComment: AnyTextProperty(.foregroundColor(commentColor)),
-                .docComment: AnyTextProperty(.foregroundColor(commentColor)),
-                .mark: AnyTextProperty(.foregroundColor(markColor), .fontWeight(.bold)),
-                .preprocessor: AnyTextProperty(.foregroundColor(preprocessorColor)),
-                .directive: AnyTextProperty(.foregroundColor(preprocessorColor)),
-                .attribute: AnyTextProperty(.foregroundColor(attributeColor)),
-                .tag: AnyTextProperty(.foregroundColor(charColor)),
-                .attributeName: AnyTextProperty(.foregroundColor(attributeColor)),
-                .inserted: AnyTextProperty(.foregroundColor(insertedColor)),
-                .deleted: AnyTextProperty(.foregroundColor(deletedColor)),
-            ]
-        )
+        return """
+        pre { color: \(codeFg); background: \(codeBg); }
+        .token.keyword { color: \(keyword); font-weight: 600; }
+        .token.string, .token.regex { color: \(string); }
+        .token.number { color: \(number); }
+        .token.comment, .token.block-comment, .token.doc-comment { color: \(comment); font-style: italic; }
+        .token.function, .token.function-name { color: \(functionName); }
+        .token.variable, .token.constant, .token.property { color: \(variable); }
+        .token.class-name { color: \(className); }
+        .token.tag { color: \(tag); }
+        .token.attr-value, .token.attribute { color: \(attr); }
+        .token.deleted { color: \(deleted); }
+        .token.inserted { color: \(inserted); }
+        .token.boolean { color: \(keyword); font-weight: 600; }
+        .token.builtin { color: \(cssHex(Color(nsColor: accentNS.blended(with: 0.3, of: inkNS) ?? accentNS))); }
+        .token.operator, .token.punctuation { color: \(codeFg); }
+        """
     }
 
     /// 从 ThemeDefinition 和对比度派生颜色

@@ -34,9 +34,6 @@ struct DetailView: View {
     @Environment(\.language) private var language
     @Environment(\.themeColors) private var themeColors
 
-    /// Markdown 内容区 NSScrollView 引用，用于大纲导航滚动
-    @State private var markdownScrollViewRef = MarkdownScrollViewRef()
-
     /// 查找替换 ViewModel
     @State private var findReplaceViewModel = FindReplaceViewModel()
 
@@ -46,6 +43,9 @@ struct DetailView: View {
     /// 刷新确认弹窗状态
     @State private var showReloadAlert = false
     @State private var dontRemindAgain = false
+
+    /// 渲染模式下当前可见标题的行号（用于大纲高亮同步）
+    @State private var activeOutlineLineNumber: Int?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -301,7 +301,8 @@ struct DetailView: View {
             items: documentViewModel.outlineItems,
             onSelect: { item in
                 documentViewModel.requestScrollToLine(item.lineNumber)
-            }
+            },
+            activeLineNumber: activeOutlineLineNumber
         )
     }
 
@@ -449,14 +450,16 @@ struct DetailView: View {
 
             // 渲染模式视图 — 仅在渲染模式下显示
             if documentViewModel.displayMode == .rendered {
-                EquatableRenderedMarkdownView(
+                WebViewMarkdownView(
                     content: documentViewModel.content,
                     fileURL: documentViewModel.currentFileURL,
                     contentPadding: settings.contentPaddingPoints,
                     scrollToLine: documentViewModel.scrollToLineRequest,
-                    scrollViewRef: markdownScrollViewRef
+                    themeCSS: themeColors.cssCustomProperties + themeColors.codeHighlightCSS,
+                    onVisibleHeadingChanged: { heading in
+                        activeOutlineLineNumber = heading?.lineNumber
+                    }
                 )
-                .textual.highlighterTheme(themeColors.highlighterTheme)
                 .onChange(of: documentViewModel.scrollToLineRequest) { _, newValue in
                     if newValue != nil {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
