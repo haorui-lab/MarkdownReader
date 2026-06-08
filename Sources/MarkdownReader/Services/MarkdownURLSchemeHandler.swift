@@ -72,19 +72,21 @@ struct MarkdownURLSchemeHandler: URLSchemeHandler {
             return baseURL.appendingPathComponent(path)
         }
 
-        if let moduleURL = Bundle.module.resourceURL?.appendingPathComponent(path),
-           FileManager.default.fileExists(atPath: moduleURL.path) {
-            return moduleURL
-        }
+        // 在 .app 包内搜索资源，不依赖 Bundle.module（其 fatalError 不可恢复）
+        // 搜索顺序：
+        //   1. Contents/Resources/MarkdownReader_MarkdownReader.bundle/Resources/{path} （正确结构）
+        //   2. Contents/Resources/Resources/{path} （bundle 被展开的情况）
+        //   3. Contents/Resources/{path} （bundle 内容被直接展开到 Resources 的情况）
+        let searchPaths: [URL] = [
+            Bundle.main.resourceURL?.appendingPathComponent("MarkdownReader_MarkdownReader.bundle").appendingPathComponent("Resources").appendingPathComponent(path),
+            Bundle.main.resourceURL?.appendingPathComponent("Resources").appendingPathComponent(path),
+            Bundle.main.resourceURL?.appendingPathComponent(path),
+        ].compactMap { $0 }
 
-        if let mainURL = Bundle.main.resourceURL?.appendingPathComponent(path),
-           FileManager.default.fileExists(atPath: mainURL.path) {
-            return mainURL
-        }
-
-        if let mainResourcesURL = Bundle.main.resourceURL?.appendingPathComponent("Resources").appendingPathComponent(path),
-           FileManager.default.fileExists(atPath: mainResourcesURL.path) {
-            return mainResourcesURL
+        for url in searchPaths {
+            if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
         }
 
         return nil

@@ -77,14 +77,14 @@ swift build
 # 构建（发布）
 swift build -c release
 
-# 构建 .app 包（含签名）
+# 构建 .app 包（含签名）— arm64 only
 ./build-app.sh --release --sign
 
-# 双架构打包 DMG
+# 打包 DMG — arm64 only
 ./package.sh
 
-# 单架构打包
-./package.sh --arch arm64
+# 本地发布到 GitHub
+./release-local.sh
 ```
 
 ## 依赖

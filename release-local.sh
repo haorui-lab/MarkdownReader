@@ -33,7 +33,7 @@ echo "✅ CHANGELOG.md 已包含版本 $VERSION"
 # 1. 本地构建 + 签名
 echo ""
 echo "🔨 本地构建 ${APP_NAME}..."
-./build-app.sh --release --sign --arch arm64
+./build-app.sh --release --sign
 
 # 2. 创建 DMG
 echo ""

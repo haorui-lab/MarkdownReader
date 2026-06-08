@@ -1,5 +1,5 @@
 #!/bin/bash
-# 构建 MarkdownReader.app
+# 构建 MarkdownReader.app (Apple Silicon / arm64 only)
 # 用法: ./build-app.sh [-r|--release] [-s|--sign [IDENTITY]] [-d|--distribution]
 #   --sign       签名 .app（非分发模式自动使用 ad-hoc 签名，可分享给他人）
 #   --sign ID    分发模式下使用指定签名身份（如 "Developer ID Application: xxx"）
@@ -22,20 +22,12 @@ PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="debug"
 SIGN_IDENTITY=""
 DISTRIBUTION=false
-ARCH=""
+ARCH="arm64"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         -r|--release) CONFIG="release" ;;
         -d|--distribution) DISTRIBUTION=true ;;
-        -a|--arch)
-            if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
-                ARCH="$2"
-                shift
-            else
-                ARCH="$(uname -m)"
-            fi
-            ;;
         -s|--sign)
             if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
                 SIGN_IDENTITY="$2"
@@ -49,21 +41,9 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-# 默认使用本机架构
-if [[ -z "$ARCH" ]]; then
-    ARCH="$(uname -m)"
-fi
-
 echo "🔨 构建 ${APP_NAME} (${CONFIG}, ${ARCH})..."
 
-# 交叉编译时指定目标架构
-if [[ "$ARCH" == "x86_64" ]]; then
-    swift build -c "$CONFIG" --arch x86_64
-elif [[ "$ARCH" == "arm64" ]]; then
-    swift build -c "$CONFIG" --arch arm64
-else
-    swift build -c "$CONFIG"
-fi
+swift build -c "$CONFIG" --arch arm64
 
 BUILD_DIR="${PROJECT_DIR}/.build/${ARCH}-apple-macosx/${CONFIG}"
 
@@ -81,13 +61,7 @@ done < <(find "${BUILD_DIR}" -name "resource_bundle_accessor.swift" -type f)
 
 if [[ "$PATCHED" -gt 0 ]]; then
     echo "🔨 重新编译（应用 Bundle.module 修补）..."
-    if [[ "$ARCH" == "x86_64" ]]; then
-        swift build -c "$CONFIG" --arch x86_64
-    elif [[ "$ARCH" == "arm64" ]]; then
-        swift build -c "$CONFIG" --arch arm64
-    else
-        swift build -c "$CONFIG"
-    fi
+    swift build -c "$CONFIG" --arch arm64
 fi
 
 APP_BUNDLE="${PROJECT_DIR}/${APP_NAME}.app"
@@ -104,7 +78,7 @@ cp "${BUILD_DIR}/${APP_NAME}" "$APP_BUNDLE/Contents/MacOS/"
 
 # 复制资源 bundle（Swift Package Manager 编译的资源）
 if [ -d "${BUILD_DIR}/${APP_NAME}_MarkdownReader.bundle" ]; then
-    cp -R "${BUILD_DIR}/${APP_NAME}_MarkdownReader.bundle/" "$APP_BUNDLE/Contents/Resources/"
+    cp -R "${BUILD_DIR}/${APP_NAME}_MarkdownReader.bundle" "$APP_BUNDLE/Contents/Resources/"
 fi
 
 # 复制依赖包的资源 bundle（Textual 的 prism-bundle.js 等）

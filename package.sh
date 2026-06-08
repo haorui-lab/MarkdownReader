@@ -1,16 +1,15 @@
 #!/bin/bash
-# 一键构建 + 打包 MarkdownReader.dmg
-# 用法: ./package.sh [--arch arm64|x86_64] [-d|--distribution]
-#   不指定 --arch 时同时构建两个架构
+# 一键构建 + 打包 MarkdownReader.dmg (Apple Silicon / arm64 only)
+# 用法: ./package.sh [-d|--distribution]
 #   --distribution  启用分发模式签名（需 Developer ID 证书 + 公证）
 set -euo pipefail
 cd "$(dirname "$0")"
 
 APP_NAME="MarkdownReader"
 DISTRIBUTION=false
+ARCH="arm64"
 
 build_dmg() {
-    local ARCH="$1"
     local DMG_NAME="MarkdownReader-${ARCH}.dmg"
 
     echo ""
@@ -19,7 +18,7 @@ build_dmg() {
     echo "=========================================="
 
     # 1. 构建并签名
-    local BUILD_ARGS=(--release --sign --arch "$ARCH")
+    local BUILD_ARGS=(--release --sign)
     if $DISTRIBUTION; then
         BUILD_ARGS+=(--distribution)
     fi
@@ -91,27 +90,15 @@ build_dmg() {
 }
 
 # 解析参数
-TARGET_ARCH=""
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --arch)
-            TARGET_ARCH="$2"
-            shift
-            ;;
         -d|--distribution) DISTRIBUTION=true ;;
         *) echo "未知选项: $1"; exit 1 ;;
     esac
     shift
 done
 
-if [[ -n "$TARGET_ARCH" ]]; then
-    # 只构建指定架构
-    build_dmg "$TARGET_ARCH"
-else
-    # 同时构建两个架构
-    build_dmg "arm64"
-    build_dmg "x86_64"
-fi
+build_dmg
 
 echo ""
 echo "🎉 所有 DMG 打包完成！"

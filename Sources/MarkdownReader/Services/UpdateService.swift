@@ -203,16 +203,9 @@ final class UpdateService: Sendable {
 /// CPU 架构标识，用于匹配下载文件
 enum Architecture: String, Sendable {
     case arm64
-    case x86_64
 
     static var current: Architecture {
-        #if arch(arm64)
-        return .arm64
-        #elseif arch(x86_64)
-        return .x86_64
-        #else
-        return .arm64
-        #endif
+        .arm64
     }
 }
 
