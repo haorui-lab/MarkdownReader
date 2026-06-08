@@ -1,0 +1,6 @@
+---
+# Jekyll will process this file
+---
+User-agent: *
+Allow: /
+Sitemap: {{ site.url }}{{ site.baseurl }}/sitemap.xml
