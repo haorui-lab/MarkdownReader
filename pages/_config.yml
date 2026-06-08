@@ -28,6 +28,7 @@ exclude:
   - Gemfile.lock
   - .gitignore
   - README.md
+  - vendor/
 
 # 插件（GitHub Pages 支持的）
 plugins:
