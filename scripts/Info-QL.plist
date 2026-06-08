@@ -14,22 +14,27 @@
 	<string>__VERSION__</string>
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
+	<key>CFBundleExecutable</key>
+	<string>MarkdownReaderQL</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26</string>
 	<key>NSExtension</key>
 	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>QLIsDataBasedPreview</key>
+			<false/>
+			<key>QLSupportedContentTypes</key>
+			<array>
+				<string>net.daringfireball.markdown</string>
+			</array>
+			<key>QLSupportsSearchableItems</key>
+			<false/>
+		</dict>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.quicklook.preview</string>
 		<key>NSExtensionPrincipalClass</key>
-		<string>MarkdownQLPreviewProvider</string>
+		<string>MarkdownReaderQL.MarkdownQLPreviewProvider</string>
 	</dict>
-	<key>QLIsDataBasedPreview</key>
-	<true/>
-	<key>QLSupportedContentTypes</key>
-	<array>
-		<string>net.daringfireball.markdown</string>
-	</array>
-	<key>QLSupportsSearchableItems</key>
-	<false/>
 </dict>
 </plist>

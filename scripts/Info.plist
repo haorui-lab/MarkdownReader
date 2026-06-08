@@ -89,17 +89,9 @@
 			</dict>
 		</dict>
 	</array>
-	<key>NSAppExtensions</key>
-	<dict>
-		<key>com.apple.security.app-sandbox</key>
-		<false/>
-		<key>Extensions</key>
-		<array>
-			<dict>
-				<key>NSExtensionIdentifier</key>
-				<string>com.markdownreader.app.QuickLook</string>
-			</dict>
-		</array>
-	</dict>
+	<key>CFBundlePlugIns</key>
+	<array>
+		<string>Contents/PlugIns/MarkdownReaderQL.appex</string>
+	</array>
 </dict>
 </plist>

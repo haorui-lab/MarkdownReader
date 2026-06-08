@@ -218,6 +218,37 @@ input[type="checkbox"]:checked {
   text-align: center;
 }
 
+.plantuml-container {
+  margin: 16px 0;
+  text-align: center;
+  background: var(--bg-elevated);
+  border-radius: calc(var(--border-radius) + 2px);
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+
+.plantuml-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.plantuml-loading {
+  color: var(--fg-muted);
+  font-size: 0.9em;
+  padding: 24px 0;
+}
+
+.plantuml-error {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: var(--border-radius);
+  border: 1px solid #e74c3c;
+  background: rgba(231, 76, 60, 0.08);
+  color: #e74c3c;
+  font-size: 0.9em;
+  text-align: center;
+}
+
 .katex-display {
   margin: 16px 0;
   overflow-x: auto;

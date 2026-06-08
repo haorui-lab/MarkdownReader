@@ -10,10 +10,6 @@ let package = Package(
         .executable(
             name: "MarkdownReader",
             targets: ["MarkdownReader"]
-        ),
-        .executable(
-            name: "MarkdownReaderQL",
-            targets: ["MarkdownReaderQL"]
         )
     ],
     dependencies: [
@@ -45,7 +41,10 @@ let package = Package(
             ]
         ),
         // Quick Look Preview Extension
-        .executableTarget(
+        // Built as a regular target (not executable) — the executable entry point
+        // (NSExtensionMain) is provided by a C wrapper in build-app.sh at link time.
+        // SPM's executableTarget always generates _main, which is wrong for App Extensions.
+        .target(
             name: "MarkdownReaderQL",
             dependencies: [
                 "MarkdownReaderKit"

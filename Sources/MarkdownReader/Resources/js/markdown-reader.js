@@ -44,6 +44,7 @@
         content.innerHTML = html;
         MR._searchHighlights = [];
         MR.renderMermaid();
+        MR.renderPlantUML();
         MR.renderKaTeX();
         MR.renderAdmonitions();
         if (typeof Prism !== 'undefined') {
@@ -158,6 +159,51 @@
       container.appendChild(errBox);
     },
 
+    async _encodePlantUML(text) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(text);
+
+      const cs = new CompressionStream('deflate-raw');
+      const writer = cs.writable.getWriter();
+      writer.write(data);
+      writer.close();
+
+      const reader = cs.readable.getReader();
+      const chunks = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const compressed = new Uint8Array(chunks.reduce((acc, c) => acc + c.length, 0));
+      let offset = 0;
+      for (const chunk of chunks) {
+        compressed.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      const map = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_';
+      let result = '';
+      for (let i = 0; i < compressed.length; i += 3) {
+        const b1 = compressed[i];
+        const b2 = i + 1 < compressed.length ? compressed[i + 1] : 0;
+        const b3 = i + 2 < compressed.length ? compressed[i + 2] : 0;
+        result += map[b1 >> 2];
+        result += map[((b1 & 0x3) << 4) | (b2 >> 4)];
+        result += map[((b2 & 0xF) << 2) | (b3 >> 6)];
+        result += map[b3 & 0x3F];
+      }
+      return result;
+    },
+
+    _showPlantUMLError(container, msg) {
+      container.innerHTML = '';
+      const errBox = document.createElement('div');
+      errBox.className = 'plantuml-error';
+      errBox.innerHTML = '<strong>PlantUML</strong> — ' + msg;
+      container.appendChild(errBox);
+    },
+
     renderMermaid() {
       const mermaidBlocks = document.querySelectorAll('code.language-mermaid, pre code.language-mermaid');
       if (mermaidBlocks.length === 0) return;
@@ -221,6 +267,80 @@
           MR._showMermaidError(container, '渲染失败：' + detail);
         });
       });
+    },
+
+    async _fetchPlantUMLSVG(source, serverUrl) {
+      const encoded = await MR._encodePlantUML(source);
+      const svgUrl = `${serverUrl}/svg/~1${encoded}`;
+      const response = await fetch(svgUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      if (!text.trim().startsWith('<svg')) {
+        throw new Error('服务器返回了无效的 SVG 内容');
+      }
+      return text;
+    },
+
+    _applyPlantUMLSVG(container, svgText) {
+      container.innerHTML = svgText;
+      const svgEl = container.querySelector('svg');
+      if (svgEl) {
+        svgEl.removeAttribute('width');
+        svgEl.removeAttribute('height');
+        svgEl.style.maxWidth = '100%';
+        svgEl.style.height = 'auto';
+      }
+    },
+
+    async renderPlantUML() {
+      const plantumlBlocks = document.querySelectorAll('code.language-plantuml, pre code.language-plantuml, code.language-puml, pre code.language-puml');
+      if (plantumlBlocks.length === 0) return;
+
+      const serverUrl = 'https://www.plantuml.com/plantuml';
+
+      const tasks = Array.from(plantumlBlocks).map(block => {
+        const pre = block.parentElement;
+        if (!pre || pre.tagName !== 'PRE') return Promise.resolve();
+
+        const source = block.textContent;
+        const container = document.createElement('div');
+        container.className = 'plantuml-container';
+        container.dataset.plantumlSource = source;
+
+        container.innerHTML = '<div class="plantuml-loading">PlantUML...</div>';
+        pre.replaceWith(container);
+
+        return MR._fetchPlantUMLSVG(source, serverUrl)
+          .then(svg => { MR._applyPlantUMLSVG(container, svg); })
+          .catch(err => {
+            console.error('[MarkdownReader] PlantUML render error:', err);
+            MR._showPlantUMLError(container, '渲染失败：' + (err.message || String(err)).substring(0, 200));
+          });
+      });
+
+      await Promise.all(tasks);
+    },
+
+    async rerenderPlantUML() {
+      const containers = document.querySelectorAll('.plantuml-container');
+      if (containers.length === 0) return;
+
+      const serverUrl = 'https://www.plantuml.com/plantuml';
+
+      const tasks = Array.from(containers).map(container => {
+        const source = container.dataset.plantumlSource;
+        if (!source) return Promise.resolve();
+        container.innerHTML = '<div class="plantuml-loading">PlantUML...</div>';
+
+        return MR._fetchPlantUMLSVG(source, serverUrl)
+          .then(svg => { MR._applyPlantUMLSVG(container, svg); })
+          .catch(err => {
+            console.error('[MarkdownReader] PlantUML rerender error:', err);
+            MR._showPlantUMLError(container, '渲染失败：' + (err.message || String(err)).substring(0, 200));
+          });
+      });
+
+      await Promise.all(tasks);
     },
 
     renderKaTeX() {
@@ -421,6 +541,7 @@
 
     init() {
       MR.renderMermaid();
+      MR.renderPlantUML();
       MR.renderKaTeX();
       MR.renderAdmonitions();
       if (typeof Prism !== 'undefined') {

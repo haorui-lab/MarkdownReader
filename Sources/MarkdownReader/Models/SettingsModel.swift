@@ -313,7 +313,12 @@ final class SettingsModel {
         self.skipFileModifiedAlert = defaults.object(forKey: Keys.skipFileModifiedAlert) as? Bool ?? false
         self.maxContentWidthFollowsWindow = defaults.object(forKey: Keys.maxContentWidthFollowsWindow) as? Bool ?? false
         self.enableCommandLine = FileManager.default.fileExists(atPath: "/usr/local/bin/mdr")
-        self.enableQuickLookPreview = defaults.object(forKey: Keys.enableQuickLookPreview) as? Bool ?? true
+        // Quick Look 预览默认启用，必须持久化到 UserDefaults
+        // （Extension 通过 CFPreferences 读取，key 不存在时返回 false）
+        if defaults.object(forKey: Keys.enableQuickLookPreview) == nil {
+            defaults.set(true, forKey: Keys.enableQuickLookPreview)
+        }
+        self.enableQuickLookPreview = defaults.bool(forKey: Keys.enableQuickLookPreview)
         self.skippedVersion = defaults.string(forKey: Keys.skippedVersion)
         self.lastUpdateCheckTime = defaults.object(forKey: Keys.lastUpdateCheckTime) as? Date
         self.appearanceMode = AppearanceMode(rawValue: defaults.string(forKey: Keys.appearanceMode) ?? "") ?? .system

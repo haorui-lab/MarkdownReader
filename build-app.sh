@@ -118,20 +118,112 @@ fi
 # 创建 PkgInfo
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
+# 解析签名身份（需要在 Extension 签名之前完成）
+if [[ -n "$SIGN_IDENTITY" ]]; then
+    if $DISTRIBUTION; then
+        # 分发模式：需要真实的 Developer ID 证书
+        if [[ "$SIGN_IDENTITY" == "auto" ]]; then
+            SIGN_IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed -n 's/.*"\(.*\)"/\1/p')
+            if [[ -z "$SIGN_IDENTITY" ]]; then
+                echo "❌ 分发模式需要 Developer ID Application 证书，未找到"
+                exit 1
+            fi
+            echo "🔑 自动检测到签名身份: $SIGN_IDENTITY"
+        fi
+    else
+        # 开发模式：如果指定了签名身份则使用，否则 ad-hoc
+        if [[ "$SIGN_IDENTITY" == "auto" ]]; then
+            # 优先查找 Apple Development / Developer ID Application 证书
+            RESOLVED_IDENTITY=$(security find-identity -v -p codesigning | grep -E "Apple Development|Developer ID Application" | head -1 | sed -n 's/.*"\(.*\)"/\1/p')
+            if [[ -n "$RESOLVED_IDENTITY" ]]; then
+                SIGN_IDENTITY="$RESOLVED_IDENTITY"
+                echo "🔑 开发模式: 使用检测到的签名身份: $SIGN_IDENTITY"
+            else
+                SIGN_IDENTITY="-"
+                echo "🔑 开发/分享模式: 未找到证书，使用 ad-hoc 签名"
+            fi
+        else
+            echo "🔑 开发模式: 使用指定签名身份"
+        fi
+    fi
+fi
+
 # MARK: - Quick Look Extension
 
 QL_EXT_NAME="MarkdownReaderQL"
-QL_APPEX="${APP_BUNDLE}/Contents/Extensions/${QL_EXT_NAME}.appex"
+QL_APPEX="${APP_BUNDLE}/Contents/PlugIns/${QL_EXT_NAME}.appex"
+QL_BINARY="${QL_APPEX}/Contents/MacOS/${QL_EXT_NAME}"
 
 mkdir -p "${QL_APPEX}/Contents/MacOS"
 mkdir -p "${QL_APPEX}/Contents/Resources"
 
-# 复制 Extension 可执行文件
-if [ -f "${BUILD_DIR}/${QL_EXT_NAME}" ]; then
-    cp "${BUILD_DIR}/${QL_EXT_NAME}" "${QL_APPEX}/Contents/MacOS/"
-    echo "📦 复制 Quick Look Extension: ${QL_EXT_NAME}"
+# 链接 Extension 可执行文件
+# SPM regular target 不产生可执行文件，需要手动链接。
+# 关键：App Extension 的入口点必须是 _NSExtensionMain（而非 _main），
+# 所以使用 -e _NSExtensionMain -u _NSExtensionMain 让链接器直接以
+# AppKit 的 NSExtensionMain 作为入口点（与 XMind 等第三方 QL Extension 一致）。
+# 不使用 C wrapper（main → NSExtensionMain），因为那样会产生 _main 符号，
+# 而 macOS Quick Look 系统期望入口点直接是 _NSExtensionMain。
+CLANG=$(xcrun -f clang)
+SDK=$(xcrun --show-sdk-path)
+
+QL_OBJECTS="${BUILD_DIR}/${QL_EXT_NAME}.build"
+KIT_OBJECTS="${BUILD_DIR}/MarkdownReaderKit.build"
+
+# 收集所有依赖的 .o 文件（cmark_gfm, cmark_gfm_extensions, CAtomic, Markdown）
+DEP_OBJS=()
+for dep_dir in "${BUILD_DIR}/cmark_gfm.build" \
+               "${BUILD_DIR}/cmark_gfm_extensions.build" \
+               "${BUILD_DIR}/CAtomic.build" \
+               "${BUILD_DIR}/Markdown.build"; do
+    if [ -d "$dep_dir" ]; then
+        for obj in "$dep_dir"/*.o; do
+            [ -f "$obj" ] && DEP_OBJS+=("$obj")
+        done
+    fi
+done
+
+if [ -d "$QL_OBJECTS" ] && [ -d "$KIT_OBJECTS" ]; then
+    echo "🔧 链接 Quick Look Extension (entry: NSExtensionMain)..."
+    SWIFT_LIB_DIR="$(xcrun -f swiftc 2>/dev/null | xargs dirname)/../lib/swift/macosx"
+    "$CLANG" -arch arm64 \
+        -e _NSExtensionMain \
+        -u _NSExtensionMain \
+        -isysroot "$SDK" \
+        -framework AppKit -framework QuickLookUI -framework WebKit \
+        -framework Foundation -framework CoreFoundation \
+        -framework SwiftUI -framework UniformTypeIdentifiers \
+        -o "$QL_BINARY" \
+        "${QL_OBJECTS}/"*.o \
+        "${KIT_OBJECTS}/"*.o \
+        "${DEP_OBJS[@]}" \
+        -rpath @executable_path/../Frameworks \
+        -rpath /usr/lib/swift \
+        -L "${BUILD_DIR}" \
+        -L "$SWIFT_LIB_DIR" \
+        -lswiftCompatibility56 -lswiftCompatibilityConcurrency \
+        -lm -lSystem \
+        2>&1
+
+    if [ -f "$QL_BINARY" ]; then
+        echo "   ✅ Extension 可执行文件已生成"
+        # 验证入口点（_NSExtensionMain 是外部符号，U = undefined，来自 AppKit）
+        # 验证入口点 — _NSExtensionMain 在链接后为 U（undefined external），
+        # 运行时从 AppKit 解析；nm 输出可能包含多余空白，需去除
+        if nm "$QL_BINARY" | tr -d ' ' | grep -q "_NSExtensionMain"; then
+            echo "   ✅ 入口点 _NSExtensionMain 已确认"
+        else
+            echo "   ⚠️  nm 未检测到 _NSExtensionMain（可能被 strip，但不影响运行）"
+        fi
+        # 确认没有 _main 符号（App Extension 入口点应为 _NSExtensionMain，不是 _main）
+        if nm "$QL_BINARY" | grep -q " _main$"; then
+            echo "   ⚠️  存在 _main 符号，Extension 可能无法被 QL 正确加载"
+        fi
+    else
+        echo "   ❌ Extension 链接失败"
+    fi
 else
-    echo "⚠️  未找到 Quick Look Extension 可执行文件: ${BUILD_DIR}/${QL_EXT_NAME}"
+    echo "⚠️  未找到 Extension 目标文件: $QL_OBJECTS"
 fi
 
 # 复制主应用的资源 bundle 到 Extension（Extension 运行在独立进程中，无法直接访问主 app 的资源）
@@ -161,48 +253,37 @@ fi
 echo -n "XPC????" > "${QL_APPEX}/Contents/PkgInfo"
 
 # 签名 Extension（必须在签名主 app 之前单独签名）
+# macOS 要求 App Extension 必须有沙盒 entitlement
+QL_ENTITLEMENTS="${PROJECT_DIR}/scripts/MarkdownReaderQL.entitlements"
 if [[ -n "$SIGN_IDENTITY" ]]; then
     echo "🔏 签名 Quick Look Extension..."
     if $DISTRIBUTION; then
-        codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "${QL_APPEX}"
+        codesign --force --options runtime --timestamp --entitlements "$QL_ENTITLEMENTS" --sign "$SIGN_IDENTITY" "${QL_APPEX}"
     else
-        codesign --force --sign - "${QL_APPEX}"
+        codesign --force --entitlements "$QL_ENTITLEMENTS" --sign "$SIGN_IDENTITY" "${QL_APPEX}"
     fi
     echo "   Quick Look Extension 已签名"
 fi
 
 # 签名
 if [[ -n "$SIGN_IDENTITY" ]]; then
-    if $DISTRIBUTION; then
-        # 分发模式：需要真实的 Developer ID 证书
-        if [[ "$SIGN_IDENTITY" == "auto" ]]; then
-            # 优先查找 Developer ID Application 证书
-            SIGN_IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed -n 's/.*"\(.*\)"/\1/p')
-            if [[ -z "$SIGN_IDENTITY" ]]; then
-                echo "❌ 分发模式需要 Developer ID Application 证书，未找到"
-                exit 1
-            fi
-            echo "🔑 自动检测到签名身份: $SIGN_IDENTITY"
-        fi
-    else
-        # 开发/分享模式：使用 ad-hoc 签名
-        # Apple Development 证书在其他 Mac 上不受信任，macOS 会硬拒绝启动 (Code=111)
-        # Ad-hoc 签名 (-) 让其他 Mac 显示标准 Gatekeeper 对话框，可右键打开绕过
-        SIGN_IDENTITY="-"
-        echo "🔑 开发/分享模式: 使用 ad-hoc 签名"
-    fi
-
     echo "🔏 签名 ${APP_NAME}.app..."
 
     if $DISTRIBUTION; then
         # 分发签名：使用 Developer ID 证书 + hardened runtime + timestamp
         # 需要配合 notarytool 公证后才能在其他 Mac 上正常启动
-        codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
+        # 注意：不使用 --deep，因为 --deep 会覆盖 Extension 的 entitlements
+        codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
         echo "   模式: 分发 (hardened runtime + timestamp)"
     else
-        # 开发/分享签名：使用 ad-hoc 签名
-        codesign --force --deep --sign - "$APP_BUNDLE"
-        echo "   模式: 开发/分享 (ad-hoc 签名)"
+        # 开发/分享签名
+        # 注意：不使用 --deep，因为 --deep 会覆盖 Extension 的 entitlements
+        codesign --force --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
+        if [[ "$SIGN_IDENTITY" == "-" ]]; then
+            echo "   模式: 开发/分享 (ad-hoc 签名)"
+        else
+            echo "   模式: 开发 (签名身份: $SIGN_IDENTITY)"
+        fi
     fi
 
     echo "🔍 验证签名..."
