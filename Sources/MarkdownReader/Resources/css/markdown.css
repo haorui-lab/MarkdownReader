@@ -107,6 +107,42 @@ pre code {
   font-size: inherit;
 }
 
+.mr-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 5px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+pre:hover .mr-copy-btn {
+  opacity: 1;
+}
+
+.mr-copy-btn:hover {
+  background: var(--bg-muted);
+  color: var(--ink);
+}
+
+.mr-copy-btn:active {
+  background: var(--border);
+}
+
+.mr-copy-btn.mr-copy-btn-copied {
+  opacity: 1;
+  color: var(--success);
+}
+
 blockquote {
   margin: 0 0 16px 0;
   padding: 0 1em;

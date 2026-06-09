@@ -47,6 +47,7 @@
         MR.renderPlantUML();
         MR.renderKaTeX();
         MR.renderAdmonitions();
+        MR.addCopyButtons();
         if (typeof Prism !== 'undefined') {
           Prism.highlightAll();
         }
@@ -416,6 +417,50 @@
       });
     },
 
+    addCopyButtons() {
+      const preBlocks = document.querySelectorAll('pre');
+      preBlocks.forEach(pre => {
+        if (pre.querySelector('.mr-copy-btn')) return;
+        pre.style.position = 'relative';
+
+        const btn = document.createElement('button');
+        btn.className = 'mr-copy-btn';
+        btn.type = 'button';
+        btn.title = 'Copy';
+        btn.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1.5 1.5 0 0 1 1.5-1.5H11"/></svg>';
+
+        btn.addEventListener('click', function() {
+          const code = pre.querySelector('code');
+          const text = code ? code.textContent : pre.textContent;
+          navigator.clipboard.writeText(text).then(() => {
+            btn.classList.add('mr-copy-btn-copied');
+            btn.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 8.5 6.5 11.5 12.5 5.5"/></svg>';
+            setTimeout(() => {
+              btn.classList.remove('mr-copy-btn-copied');
+              btn.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1.5 1.5 0 0 1 1.5-1.5H11"/></svg>';
+            }, 2000);
+          }).catch(() => {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            btn.classList.add('mr-copy-btn-copied');
+            btn.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 8.5 6.5 11.5 12.5 5.5"/></svg>';
+            setTimeout(() => {
+              btn.classList.remove('mr-copy-btn-copied');
+              btn.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1.5 1.5 0 0 1 1.5-1.5H11"/></svg>';
+            }, 2000);
+          });
+        });
+
+        pre.appendChild(btn);
+      });
+    },
+
     _searchHighlights: [],
 
     highlightSearch(query, caseSensitive, wholeWord, currentIndex) {
@@ -544,6 +589,7 @@
       MR.renderPlantUML();
       MR.renderKaTeX();
       MR.renderAdmonitions();
+      MR.addCopyButtons();
       if (typeof Prism !== 'undefined') {
         Prism.highlightAll();
       }
