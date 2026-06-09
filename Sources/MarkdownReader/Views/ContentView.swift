@@ -61,27 +61,28 @@ struct ContentView: View {
                 fileTreeViewModel.documentViewModel = documentViewModel
                 applyAppearance(settings.appearanceMode)
 
-                // 检查 UserDefaults 中是否有待打开的文件（从 AppDelegate 写入）
-                // 这是最可靠的后备机制：即使通知丢失（无窗口时），视图挂载后也能读取
+                // 后备机制：清理 UserDefaults 中残留的待打开路径
+                // 正常流程：AppDelegate.applicationDidFinishLaunching 主动发通知打开文件
+                // 此处仅在 AppDelegate 尚未处理（如极早期视图挂载时）才兜底
                 if let filePath = UserDefaults.standard.string(forKey: "pendingOpenFilePath") {
                     UserDefaults.standard.removeObject(forKey: "pendingOpenFilePath")
+                    UserDefaults.standard.removeObject(forKey: "pendingOpenDirectoryPath")
                     let url = URL(fileURLWithPath: filePath)
+                    // 幂等保护：如果 AppDelegate 已通过通知打开，FileOpenModifier 会跳过
                     appViewModel.openSingleFile(url)
                     fileTreeViewModel.selectedFileURL = url
                     settings.lastOpenedDirectory = nil
                     settings.lastOpenedFile = url
                     settings.addRecentItem(url: url, isDirectory: false)
-                    // 冷启动时显式加载文件，避免依赖 SelectionChangeModifier 的异步触发
-                    // 修复：双击 md 文件冷启动偶发显示欢迎页的 bug
                     await documentViewModel.loadFile(at: url)
                 } else if let dirPath = UserDefaults.standard.string(forKey: "pendingOpenDirectoryPath") {
                     UserDefaults.standard.removeObject(forKey: "pendingOpenDirectoryPath")
+                    UserDefaults.standard.removeObject(forKey: "pendingOpenFilePath")
                     let url = URL(fileURLWithPath: dirPath)
                     appViewModel.openDirectory(url)
                     settings.lastOpenedDirectory = url
                     settings.lastOpenedFile = nil
                     settings.addRecentItem(url: url, isDirectory: true)
-                    // 冷启动时显式加载目录
                     await fileTreeViewModel.loadDirectory(url)
                 }
                 // 不在此处调用 restoreLastLocation()

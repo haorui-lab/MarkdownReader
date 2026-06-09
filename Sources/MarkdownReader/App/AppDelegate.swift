@@ -6,7 +6,9 @@ import os
 ///
 /// macOS 15+ 上 SwiftUI WindowGroup 在收到文件打开事件时可能创建不可见窗口。
 /// 修复策略：
-/// - 冷启动：SwiftUI 创建窗口（可能不可见），延迟后激活；文件通过 UserDefaults 传递给 ContentView.task
+/// - 冷启动：applicationDidFinishLaunching 延迟后主动发送 .openFile/.openDirectory 通知
+/// - ContentView.task 作为极早期后备（在 AppDelegate 延迟前已挂载时）
+/// - UserDefaults 是协调点：无论谁先处理，都会清除 key，避免重复打开
 /// - 热启动有窗口：直接发送通知
 /// - 热启动无窗口：激活 SwiftUI 创建的不可见窗口，然后发送通知
 /// - Dock 点击无窗口：激活不可见窗口，重置为欢迎页
@@ -106,8 +108,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - 应用生命周期
 
     /// 应用启动完成后，处理冷启动场景
-    /// 如果有待处理文件 URL，ContentView.task 会通过 UserDefaults 读取并打开。
-    /// 如果没有待处理文件且 reopenLastLocation 开启，发送 restoreLastLocation 通知。
+    /// 策略：AppDelegate 主动发送通知打开文件，不再依赖 ContentView.task 读取 UserDefaults。
+    /// ContentView.task 仅作为后备（清理 UserDefaults 残留值）。
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSWindow.allowsAutomaticWindowTabbing = false
 
@@ -121,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         didFinishLaunching = true
         logger.info("applicationDidFinishLaunching — pendingFile: \(self.pendingOpenFileURL != nil), pendingDir: \(self.pendingOpenDirectoryURL != nil)")
 
-        // 延迟处理，确保 SwiftUI WindowGroup 窗口已创建
+        // 延迟处理，确保 SwiftUI WindowGroup 窗口已创建且 ContentView 已挂载
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self else { return }
 
@@ -133,21 +135,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // 注册窗口拖拽：绕过 SwiftUI .onDrop，直接使用 AppKit NSDraggingDestination
             self.installFileDropHandler()
 
-            // 清理冷启动时的待处理 URL 属性
-            // ContentView.task 已通过 UserDefaults 读取并处理，无需再发通知
-            // 同时检查 UserDefaults 中是否还有待处理路径（application(_:open:) 可能延迟调用）
-            // 如果有待处理路径，说明文件打开事件即将到来，不应发送 .restoreLastLocation
-            let hasPendingFileInUserDefaults = UserDefaults.standard.string(forKey: "pendingOpenFilePath") != nil
-            let hasPendingDirInUserDefaults = UserDefaults.standard.string(forKey: "pendingOpenDirectoryPath") != nil
-            if self.pendingOpenFileURL != nil || hasPendingFileInUserDefaults {
+            // 冷启动时主动发送文件/目录打开通知
+            // 修复：之前依赖 ContentView.task 通过 UserDefaults 读取，存在时序竞争：
+            // ContentView.task 可能晚于 restoreLastLocation 执行，导致欢迎页覆盖待打开文件
+            // 现在改为 AppDelegate 统一发送通知，ContentView.task 仅作为极早期后备
+            // UserDefaults 是协调点：无论谁先处理，都会清除 key，避免重复打开
+            let pendingFilePath = UserDefaults.standard.string(forKey: "pendingOpenFilePath")
+            let pendingDirPath = UserDefaults.standard.string(forKey: "pendingOpenDirectoryPath")
+
+            if let filePath = pendingFilePath {
+                let url = URL(fileURLWithPath: filePath)
                 self.pendingOpenFileURL = nil
-                self.logger.info("Cold start: pending file handled by ContentView.task via UserDefaults")
-            } else if self.pendingOpenDirectoryURL != nil || hasPendingDirInUserDefaults {
+                UserDefaults.standard.removeObject(forKey: "pendingOpenFilePath")
+                UserDefaults.standard.removeObject(forKey: "pendingOpenDirectoryPath")
+                self.logger.info("Cold start: posting .openFile for \(url.path)")
+                NotificationCenter.default.post(name: .openFile, object: url)
+            } else if let dirPath = pendingDirPath {
+                let url = URL(fileURLWithPath: dirPath)
                 self.pendingOpenDirectoryURL = nil
-                self.logger.info("Cold start: pending directory handled by ContentView.task via UserDefaults")
-            } else if SettingsModel.shared.reopenLastLocation {
-                self.logger.info("Cold start: restoring last location")
-                NotificationCenter.default.post(name: .restoreLastLocation, object: nil)
+                UserDefaults.standard.removeObject(forKey: "pendingOpenFilePath")
+                UserDefaults.standard.removeObject(forKey: "pendingOpenDirectoryPath")
+                self.logger.info("Cold start: posting .openDirectory for \(url.path)")
+                NotificationCenter.default.post(name: .openDirectory, object: url)
+            } else {
+                // UserDefaults 已被 ContentView.task 清理，说明文件已被极早期后备路径打开
+                // 仅清理属性，不再发通知，避免重复打开
+                self.pendingOpenFileURL = nil
+                self.pendingOpenDirectoryURL = nil
+                if SettingsModel.shared.reopenLastLocation {
+                    self.logger.info("Cold start: restoring last location")
+                    NotificationCenter.default.post(name: .restoreLastLocation, object: nil)
+                }
             }
         }
     }

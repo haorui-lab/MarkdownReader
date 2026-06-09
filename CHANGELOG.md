@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.6] - 2026-06-09
+
+### 修复
+
+- **冷启动文件打开时序竞争**：`AppDelegate.applicationDidFinishLaunching` 主动发送 `.openFile`/`.openDirectory` 通知打开文件，不再依赖 `ContentView.task` 通过 UserDefaults 读取；`ContentView.task` 仅作为极早期后备（在 AppDelegate 延迟前已挂载时），UserDefaults 作为协调点避免重复打开
+- **冷启动恢复位置误覆盖**：仅当 UserDefaults 中无待处理文件/目录路径时才发送 `.restoreLastLocation` 通知，防止恢复位置覆盖用户双击打开的文件
+
 ## [2.0.5] - 2026-06-09
 
 ### 修复
