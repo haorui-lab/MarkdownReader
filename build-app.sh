@@ -76,9 +76,26 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 # 复制可执行文件
 cp "${BUILD_DIR}/${APP_NAME}" "$APP_BUNDLE/Contents/MacOS/"
 
+# Strip 主二进制（去除本地符号表，保留外部符号以便动态链接）
+# 符号信息仍可通过 dSYM 获取，不影响崩溃符号化
+echo "🔪 Strip 主二进制..."
+strip -x "$APP_BUNDLE/Contents/MacOS/${APP_NAME}"
+
 # 复制资源 bundle（Swift Package Manager 编译的资源）
 if [ -d "${BUILD_DIR}/${APP_NAME}_MarkdownReader.bundle" ]; then
     cp -R "${BUILD_DIR}/${APP_NAME}_MarkdownReader.bundle" "$APP_BUNDLE/Contents/Resources/"
+
+    # 移除 SPM bundle 中的 AppIcon（已通过 actool 编译到 Assets.car 中提供，无需重复）
+    SPM_BUNDLE="${APP_BUNDLE}/Contents/Resources/${APP_NAME}_MarkdownReader.bundle"
+    if [ -d "${SPM_BUNDLE}/Assets.xcassets/AppIcon.appiconset" ]; then
+        rm -rf "${SPM_BUNDLE}/Assets.xcassets/AppIcon.appiconset"
+        # 如果 Assets.xcassets 目录已空（只剩 Contents.json），也一并移除
+        remaining=$(find "${SPM_BUNDLE}/Assets.xcassets" -mindepth 1 -not -name "Contents.json" 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$remaining" -eq 0 ]; then
+            rm -rf "${SPM_BUNDLE}/Assets.xcassets"
+        fi
+        echo "🗑️  移除 SPM bundle 中冗余 AppIcon（已通过 Assets.car 提供）"
+    fi
 fi
 
 # 复制依赖包的资源 bundle（Textual 的 prism-bundle.js 等）
@@ -206,6 +223,9 @@ if [ -d "$QL_OBJECTS" ] && [ -d "$KIT_OBJECTS" ]; then
         2>&1
 
     if [ -f "$QL_BINARY" ]; then
+        # Strip Extension 二进制（去除本地符号表）
+        echo "🔪 Strip Extension 二进制..."
+        strip -x "$QL_BINARY"
         echo "   ✅ Extension 可执行文件已生成"
         # 验证入口点（_NSExtensionMain 是外部符号，U = undefined，来自 AppKit）
         # 验证入口点 — _NSExtensionMain 在链接后为 U（undefined external），
@@ -229,6 +249,23 @@ fi
 # 复制主应用的资源 bundle 到 Extension（Extension 运行在独立进程中，无法直接访问主 app 的资源）
 if [ -d "${BUILD_DIR}/${APP_NAME}_MarkdownReader.bundle" ]; then
     cp -R "${BUILD_DIR}/${APP_NAME}_MarkdownReader.bundle" "${QL_APPEX}/Contents/Resources/"
+
+    # QL Extension 不需要 AppIcon（Extension 不显示自己的图标）
+    QL_BUNDLE="${QL_APPEX}/Contents/Resources/${APP_NAME}_MarkdownReader.bundle"
+    if [ -d "${QL_BUNDLE}/Assets.xcassets/AppIcon.appiconset" ]; then
+        rm -rf "${QL_BUNDLE}/Assets.xcassets/AppIcon.appiconset"
+        remaining=$(find "${QL_BUNDLE}/Assets.xcassets" -mindepth 1 -not -name "Contents.json" 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$remaining" -eq 0 ]; then
+            rm -rf "${QL_BUNDLE}/Assets.xcassets"
+        fi
+        echo "🗑️  移除 QL Extension bundle 中冗余 AppIcon"
+    fi
+
+    # QL Extension 不需要 mermaid（Quick Look 预览不渲染复杂图表，省 3.1 MB）
+    if [ -f "${QL_BUNDLE}/Resources/js/mermaid.min.js" ]; then
+        rm -f "${QL_BUNDLE}/Resources/js/mermaid.min.js"
+        echo "🗑️  移除 QL Extension bundle 中 mermaid.min.js（省 ~3.1 MB）"
+    fi
 fi
 
 # 复制依赖包的资源 bundle 到 Extension
