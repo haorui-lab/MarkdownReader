@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.5] - 2026-06-09
+
+### 修复
+
+- **冷启动双击 md 文件偶发显示欢迎页**：ContentView.task 中冷启动时显式调用 `loadFile`，不再依赖 SelectionChangeModifier 的异步触发；同时显式加载目录，避免时序竞争
+- **冷启动恢复位置误覆盖**：`restoreLastLocation()` 新增守护检查，若冷启动已通过 UserDefaults 打开了文件/目录，不再发送 `.restoreLastLocation` 通知覆盖
+- **AppDelegate 冷启动待处理 URL 检测增强**：同时检查 UserDefaults 中的 `pendingOpenFilePath` / `pendingOpenDirectoryPath`，防止 `application(_:open:)` 延迟调用时误发恢复位置通知
+- **切换文件时旧错误状态未清除**：`DocumentViewModel.loadFile` 开头先清除 `fileError`，修复从不支持格式文件切换到 md 文件时 `hasDocument` 始终为 false、DetailView 继续显示 ErrorView 的问题
+
 ## [2.0.4] - 2026-06-09
 
 ### 变更

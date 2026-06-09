@@ -71,7 +71,9 @@ struct ContentView: View {
                     settings.lastOpenedDirectory = nil
                     settings.lastOpenedFile = url
                     settings.addRecentItem(url: url, isDirectory: false)
-                    // 不需要显式调用 loadFile — selectedFileURL 变化会触发 SelectionChangeModifier 统一加载
+                    // 冷启动时显式加载文件，避免依赖 SelectionChangeModifier 的异步触发
+                    // 修复：双击 md 文件冷启动偶发显示欢迎页的 bug
+                    await documentViewModel.loadFile(at: url)
                 } else if let dirPath = UserDefaults.standard.string(forKey: "pendingOpenDirectoryPath") {
                     UserDefaults.standard.removeObject(forKey: "pendingOpenDirectoryPath")
                     let url = URL(fileURLWithPath: dirPath)
@@ -79,6 +81,8 @@ struct ContentView: View {
                     settings.lastOpenedDirectory = url
                     settings.lastOpenedFile = nil
                     settings.addRecentItem(url: url, isDirectory: true)
+                    // 冷启动时显式加载目录
+                    await fileTreeViewModel.loadDirectory(url)
                 }
                 // 不在此处调用 restoreLastLocation()
                 // 冷启动时，applicationDidFinishLaunching 通过 .restoreLastLocation 通知处理
@@ -188,6 +192,12 @@ struct ContentView: View {
     /// 恢复上次打开的位置（目录或文件）
     /// 用于 Dock 点击重新激活且 reopenLastLocation 开启时
     private func restoreLastLocation() {
+        // 如果冷启动已通过 UserDefaults 打开了文件/目录，不覆盖
+        // 修复：冷启动双击 md 文件时，applicationDidFinishLaunching 的 0.5s 延迟
+        // 可能误发 .restoreLastLocation，覆盖掉 ContentView.task 已打开的文件
+        if appViewModel.isSingleFileMode || appViewModel.rootDirectory != nil {
+            return
+        }
         if let dir = settings.lastOpenedDirectory {
             appViewModel.openDirectory(dir)
             settings.addRecentItem(url: dir, isDirectory: true)

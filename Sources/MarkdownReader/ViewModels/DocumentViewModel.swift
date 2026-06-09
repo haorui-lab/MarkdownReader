@@ -146,6 +146,11 @@ final class DocumentViewModel {
         let ext = url.pathExtension.lowercased()
         var forceRawMode = false
 
+        // 先清除之前的错误状态，确保切换文件时 hasDocument 能正确更新
+        // 修复：从不支持格式文件切换到 md 文件时，旧 fileError 未及时清除，
+        // 导致 hasDocument 始终为 false，DetailView 继续显示 ErrorView 而非文档内容
+        fileError = nil
+
         if FileService.markdownExtensions.contains(ext) {
             // 已知 Markdown 扩展名，直接加载
         } else if ext == "txt" {

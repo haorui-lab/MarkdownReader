@@ -135,10 +135,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             // 清理冷启动时的待处理 URL 属性
             // ContentView.task 已通过 UserDefaults 读取并处理，无需再发通知
-            if self.pendingOpenFileURL != nil {
+            // 同时检查 UserDefaults 中是否还有待处理路径（application(_:open:) 可能延迟调用）
+            // 如果有待处理路径，说明文件打开事件即将到来，不应发送 .restoreLastLocation
+            let hasPendingFileInUserDefaults = UserDefaults.standard.string(forKey: "pendingOpenFilePath") != nil
+            let hasPendingDirInUserDefaults = UserDefaults.standard.string(forKey: "pendingOpenDirectoryPath") != nil
+            if self.pendingOpenFileURL != nil || hasPendingFileInUserDefaults {
                 self.pendingOpenFileURL = nil
                 self.logger.info("Cold start: pending file handled by ContentView.task via UserDefaults")
-            } else if self.pendingOpenDirectoryURL != nil {
+            } else if self.pendingOpenDirectoryURL != nil || hasPendingDirInUserDefaults {
                 self.pendingOpenDirectoryURL = nil
                 self.logger.info("Cold start: pending directory handled by ContentView.task via UserDefaults")
             } else if SettingsModel.shared.reopenLastLocation {
