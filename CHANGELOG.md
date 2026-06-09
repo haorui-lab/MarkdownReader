@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.3] - 2026-06-09
+
+### 新增
+
+- **代码块一键复制**：渲染视图中的代码块右上角悬停显示复制按钮，点击即可复制代码内容
+  - 优先使用 `navigator.clipboard` API，降级使用 `document.execCommand('copy')`
+  - 复制成功后按钮变为对勾图标，2 秒后自动恢复
+  - 样式使用主题 CSS 变量，自动适配深色/浅色主题
+
 ## [2.0.2] - 2026-06-09
 
 ### 新增
