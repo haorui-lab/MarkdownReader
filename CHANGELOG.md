@@ -5,6 +5,35 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.2] - 2026-06-09
+
+### 新增
+
+- **PDF 导出**：新增 `PDFExportService`，支持将渲染视图导出为 PDF 文件，自动等待图片、Mermaid、PlantUML 渲染完成后再导出，菜单快捷键 `Cmd+Option+E`
+- **拖拽打开文件**：重写拖拽系统，绕过 SwiftUI `.onDrop`，直接使用 AppKit `NSDraggingDestination`，在窗口 themeFrame 上安装 `FileDropOverlayView`，支持拖拽 .md/.markdown/.mdown/.mkd/.txt 文件到窗口打开
+- **多扩展名支持**：全面支持 .md / .markdown / .mdown / .mkd 扩展名
+  - `FileService` 新增 `markdownExtensions` / `treeDisplayExtensions` 靆合及 `isMarkdownFile()` / `detectMarkdownContent()` 方法
+  - `OpenPanelHelper` 文件选择面板和另存为面板支持所有 Markdown 扩展名
+  - `SettingsModel` 默认打开程序检查和设置同时覆盖 .md/.markdown/.mdown/.mkd 四种扩展名
+  - `Info.plist` 新增 `CFBundleTypeExtensions` 和 `mdown`/`mkd` 扩展名声明
+- **纯文本模式**：`.txt` 文件加载时通过内容特征检测判断是否为 Markdown，非 Markdown 的 .txt 以纯文本模式加载（仅编辑模式，禁止切换渲染）
+- **窗口拖动区域**：新增 `WindowDragArea` / `WindowDragNSView`，支持自定义标题栏区域的窗口拖动
+- **不支持文件类型提示**：拖入不支持的文件类型时弹出提示弹窗，告知用户具体扩展名
+- **本地化新增**：`exportPDF`、`exportPDFFailed`、`unsupportedFileTypeAlert` 等键值
+
+### 变更
+
+- **DMG/ZIP 命名简化**：DMG 和 ZIP 文件名不再包含版本号后缀，统一为 `MarkdownReader.dmg` / `MarkdownReader.zip`
+- **DMG 卷名简化**：卷名从 `Markdown Reader $VERSION` 简化为 `Markdown Reader`
+- **删除 QLMarkdown 子模块**：移除未使用的 QLMarkdown submodule 引用
+- **架构文档更新**：新增 `architecture.pdf`
+
+### 修复
+
+- **语法高亮斜体跨行匹配**：斜体正则不再使用 `.dotMatchesLineSeparators`，遵守 CommonMark 段落边界规范
+- **下划线斜体误匹配**：`_text_` 模式增加左侧/右侧非字母数字边界检查，避免 `tag_name`、`APP_PATH` 等标识符中的下划线被误解析为斜体
+- **语法高亮部分覆盖跳过**：`highlightDeletion` / `highlightInsertion` / `highlightItalic` 新增 `isPartiallyCovered` 检查，跳过跨越代码块边界的匹配
+
 ## [2.0.1] - 2026-06-08
 
 ### 变更
