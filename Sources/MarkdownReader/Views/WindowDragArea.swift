@@ -12,11 +12,17 @@ struct WindowDragArea: NSViewRepresentable {
     func updateNSView(_ nsView: WindowDragNSView, context: Context) {}
 }
 
-/// 支持窗口拖动的 NSView
-/// mouseDown 时调用 NSWindow.performDrag(with:) 启动窗口拖动
+/// 支持窗口拖动和双击切换最大化的 NSView
+/// 单击：调用 NSWindow.performDrag(with:) 启动窗口拖动
+/// 双击：调用 NSWindow.zoom(_:) 切换最大化/还原
 final class WindowDragNSView: NSView {
     override func mouseDown(with event: NSEvent) {
         guard let window = window else { return }
-        window.performDrag(with: event)
+        // 双击标题栏：切换最大化/还原
+        if event.clickCount == 2 {
+            window.zoom(nil)
+        } else {
+            window.performDrag(with: event)
+        }
     }
 }
