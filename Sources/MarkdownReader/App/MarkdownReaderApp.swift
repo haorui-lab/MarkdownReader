@@ -198,6 +198,23 @@ struct MarkdownReaderApp: App {
                     NotificationCenter.default.post(name: .switchToRaw, object: nil)
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button(L10n.tr(.viewZoomIn, language: language)) {
+                    NotificationCenter.default.post(name: .zoomIn, object: nil)
+                }
+                .keyboardShortcut("+", modifiers: .command)
+
+                Button(L10n.tr(.viewZoomOut, language: language)) {
+                    NotificationCenter.default.post(name: .zoomOut, object: nil)
+                }
+                .keyboardShortcut("-", modifiers: .command)
+
+                Button(L10n.tr(.viewZoomReset, language: language)) {
+                    NotificationCenter.default.post(name: .zoomReset, object: nil)
+                }
+                .keyboardShortcut("0", modifiers: .command)
             }
 
             // 查找菜单
@@ -250,4 +267,7 @@ extension Notification.Name {
     static let exportPDF = Notification.Name("com.markdownreader.exportPDF")
     static let dragHoverChanged = Notification.Name("com.markdownreader.dragHoverChanged")
     static let unsupportedFileTypeDropped = Notification.Name("com.markdownreader.unsupportedFileTypeDropped")
+    static let zoomIn = Notification.Name("com.markdownreader.zoomIn")
+    static let zoomOut = Notification.Name("com.markdownreader.zoomOut")
+    static let zoomReset = Notification.Name("com.markdownreader.zoomReset")
 }

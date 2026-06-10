@@ -225,6 +225,10 @@ public enum L10n {
 
         // 拖拽
         case unsupportedFileTypeAlert
+        // 缩放
+        case viewZoomIn
+        case viewZoomOut
+        case viewZoomReset
     }
 
     // MARK: - 翻译字典
@@ -380,6 +384,9 @@ public enum L10n {
         .exportPDFSuccess: "PDF exported successfully",
         .exportPDFFailed: "Failed to export PDF",
         .unsupportedFileTypeAlert: "Unsupported file type (.{ext}). Only Markdown files can be opened.",
+        .viewZoomIn: "Zoom In",
+        .viewZoomOut: "Zoom Out",
+        .viewZoomReset: "Actual Size",
     ]
 
     private static let zhCN: [Key: String] = [
@@ -533,6 +540,9 @@ public enum L10n {
         .exportPDFSuccess: "PDF 导出成功",
         .exportPDFFailed: "PDF 导出失败",
         .unsupportedFileTypeAlert: "不支持的文件类型（.{ext}）。仅支持打开 Markdown 文件。",
+        .viewZoomIn: "放大",
+        .viewZoomOut: "缩小",
+        .viewZoomReset: "实际大小",
     ]
 
     private static let zhTW: [Key: String] = [
@@ -686,6 +696,9 @@ public enum L10n {
         .exportPDFSuccess: "PDF 匯出成功",
         .exportPDFFailed: "PDF 匯出失敗",
         .unsupportedFileTypeAlert: "不支援的檔案類型（.{ext}）。僅支援開啟 Markdown 檔案。",
+        .viewZoomIn: "放大",
+        .viewZoomOut: "縮小",
+        .viewZoomReset: "實際大小",
     ]
 
     // MARK: - 查找

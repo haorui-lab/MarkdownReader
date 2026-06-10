@@ -58,6 +58,7 @@ struct WebViewMarkdownView: View {
     @State private var isConfigured = false
     @State private var currentHeadings: [MarkdownHTMLService.HeadingInfo] = []
     @State private var pendingScrollToLine: Int?
+    @State private var zoomLevel: CGFloat = 1.0
 
     var body: some View {
         WebView(page)
@@ -102,6 +103,9 @@ struct WebViewMarkdownView: View {
                     pendingScrollToLine = nil
                     scrollToLineNumber(line)
                 }
+                if !isLoading && zoomLevel != 1.0 {
+                    restoreZoom()
+                }
             }
             .onChange(of: themeCSS) { _, _ in
                 updateThemeCSS(themeCSS)
@@ -131,6 +135,15 @@ struct WebViewMarkdownView: View {
             }
             .onDisappear {
                 scrollSyncTimer?.invalidate()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in
+                applyZoom(zoomLevel + 0.1)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in
+                applyZoom(zoomLevel - 0.1)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .zoomReset)) { _ in
+                applyZoom(1.0)
             }
             .environment(\.openURL, OpenURLAction { url in
                 NSWorkspace.shared.open(url)
@@ -298,6 +311,25 @@ struct WebViewMarkdownView: View {
                 }
                 onVisibleHeadingChanged?(MarkdownHTMLService.HeadingInfo(id: id, level: level, title: title, lineNumber: lineNumber))
             }
+        }
+    }
+
+    // MARK: - 缩放
+
+    /// 恢复缩放级别（页面加载完成后调用）
+    private func restoreZoom() {
+        let rounded = String(format: "%.2f", zoomLevel)
+        Task { @MainActor [rounded] in
+            _ = try? await page.callJavaScript("document.body.style.zoom = '\(rounded)'")
+        }
+    }
+
+    private func applyZoom(_ level: CGFloat) {
+        let clamped = min(max(level, 0.3), 3.0)
+        zoomLevel = clamped
+        let rounded = String(format: "%.2f", clamped)
+        Task { @MainActor [rounded] in
+            _ = try? await page.callJavaScript("document.body.style.zoom = '\(rounded)'")
         }
     }
 }
