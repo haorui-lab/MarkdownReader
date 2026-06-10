@@ -50,10 +50,14 @@ Markdown Reader 就是为这个场景而生：
 | `Cmd+O` | 打开目录 / 文件 |
 | `Cmd+N` | 新建文件 |
 | `Cmd+S` | 保存文件 |
+| `Cmd+Option+E` | 导出 PDF |
 | `Cmd+,` | 打开设置 |
 | `Cmd+\` | 切换侧边栏 |
 | `Cmd+Shift+E` | 渲染模式 |
 | `Cmd+Shift+R` | 原文模式 |
+| `Cmd++` | 放大 |
+| `Cmd+-` | 缩小 |
+| `Cmd+0` | 实际大小 |
 | `Cmd+F` | 查找 |
 | `Cmd+G` | 查找下一个 |
 | `Cmd+Shift+G` | 查找上一个 |
