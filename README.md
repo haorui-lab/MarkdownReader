@@ -79,4 +79,19 @@ macOS 26 (Tahoe) 或更高版本。
 
 ---
 
+## 致谢
+
+Markdown Reader 的构建离不开以下开源项目：
+
+- [cmark-gfm](https://github.com/github/cmark-gfm) — GitHub Flavored Markdown 解析与渲染引擎
+- [swift-markdown](https://github.com/apple/swift-markdown) — Apple 的 Swift Markdown 解析库（基于 cmark-gfm）
+- [KaTeX](https://katex.org/) — 高速 LaTeX 数学公式渲染
+- [Mermaid](https://mermaid.js.org/) — 基于文本的图表生成（流程图、时序图、甘特图等）
+- [Prism.js](https://prismjs.com/) — 轻量级代码语法高亮
+- [PlantUML](https://plantuml.com/) — 开源 UML 图表渲染
+
+特别感谢 [linux.do](https://linux.do/) 社区的反馈与支持。
+
+---
+
 MIT License
