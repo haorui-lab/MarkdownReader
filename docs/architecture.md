@@ -2,7 +2,7 @@
 
 ## 1. 架构总览
 
-采用 SwiftUI 原生的声明式架构，遵循 MVVM 模式。应用以单窗口为主，自定义三栏布局（HStack + DragGesture）：左侧 Sidebar 目录树 + 中间内容区 + 右侧大纲面板。窗口使用 `.windowStyle(.hiddenTitleBar)` 隐藏系统标题栏，通过自定义 TitleBar 视图实现工具栏功能。使用 `@Observable` (macOS 26+) 进行状态管理，Swift 6.0 严格并发。
+采用 SwiftUI 原生的声明式架构，遵循 MVVM 模式。应用以单窗口为主，自定义三栏布局（HStack + DragGesture）：左侧 Sidebar 目录树 + 中间内容区 + 右侧大纲面板。窗口使用 `.windowStyle(.hiddenTitleBar)` 隐藏系统标题栏，通过自定义 TitleBar 视图实现工具栏功能。使用 `@Observable` (macOS 14+) 进行状态管理，Swift 6.0 严格并发。渲染引擎使用 macOS 26 的 `WebPage` + `WebView` SwiftUI 原生 API，替代了 v1.x 的 Textual 方案。
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -35,7 +35,7 @@ ContentView (HStack)
 | 组件 | 选择 | 理由 |
 |------|------|------|
 | UI 框架 | SwiftUI | macOS 原生，声明式 |
-| Markdown 渲染 | cmark-gfm + WKWebView (v2.x) | 完整 GFM 扩展语法，支持 Mermaid/PlantUML/KaTeX/Prism.js，替代 Textual |
+| Markdown 渲染 | cmark-gfm + WebPage (macOS 26) | 完整 GFM 扩展语法，支持 Mermaid/PlantUML/KaTeX/Prism.js，SwiftUI 原生 WebView |
 | 目录树 | 递归 DisclosureGroup | 原生树形展示方案，支持自定义行样式 |
 | 布局 | 自定义 HStack + NSViewRepresentable ResizeHandle | 支持自定义拖拽阈值（140px 自动隐藏）、单文件模式无 Sidebar、圆角 Detail 区域；NavigationSplitView 无法满足这些需求；SwiftUI DragGesture 在 macOS 上不可靠 |
 | 窗口样式 | .windowStyle(.hiddenTitleBar) | 支持自定义 TitleBar 视图和圆角 Detail 区域；系统 NSToolbar 无法实现 Buddy 风格布局 |
@@ -66,7 +66,7 @@ ContentView (HStack)
 | OutlineResizeHandle | 大纲面板拖拽调整宽度（拖拽方向与 ResizeHandle 相反） |
 | ResizeHandle | Sidebar 边缘分隔线 + 拖拽调整宽度（NSViewRepresentable + NSView 鼠标事件） |
 | SettingsView | 设置视图，两栏布局（General / Appearance） |
-| RenderedMarkdownView | Markdown 渲染显示视图（WKWebView + cmark-gfm） |
+| WebViewMarkdownView | Markdown 渲染显示视图（WebPage + WebView，macOS 26 原生） |
 | RawMarkdownView | Markdown 原文显示视图（TextEditor + SF Mono） |
 | ProjectStatusView | 底部 Git 状态栏（分支、变更、commit+push） |
 | TrafficLightButtons | 自定义窗口控制按钮（close/minimize/zoom），hover 显示图标 |
@@ -136,7 +136,7 @@ MarkdownReaderApp (.windowStyle(.hiddenTitleBar))
         └── DetailView (圆角容器)
               ├── TrafficLightButtons (if !isSidebarVisible)
               ├── TitleBar (内嵌于 DetailView)
-              ├── RenderedMarkdownView (WKWebView + cmark-gfm)
+              ├── WebViewMarkdownView (WebPage + WebView)
               ├── RawMarkdownView (TextEditor)
               ├── WelcomeView
               ├── ErrorView
@@ -168,11 +168,11 @@ LocalizationService
 ```
 
 外部依赖：
-- Textual: `https://github.com/gonzalezreal/textual` v0.3.1+ (SPM) — 过渡期保留，v2.x 渲染已迁移至 cmark-gfm + WKWebView
-  - 许可证：MIT
-  - Swift 6.0 + macOS 26+
-  - 依赖：swift-concurrency-extras 1.4.0, swiftui-math 0.1.0
-- cmark-gfm: 内嵌 C 源码，GFM 扩展解析
+- swift-markdown: `https://github.com/apple/swift-markdown` 0.5.0+ (SPM) — Apple 官方 Markdown 解析库（基于 cmark-gfm）
+  - 许可证：Apache 2.0
+  - Swift 6.0 + macOS 13+
+  - 传递依赖：swift-cmark
+- 内嵌 C 源码：cmark-gfm（GFM 扩展解析，通过 swift-cmark 使用）
 - Mermaid.js: 本地打包，图表渲染
 - KaTeX: 本地打包，数学公式渲染
 - Prism.js: 本地打包，代码语法高亮
@@ -184,7 +184,7 @@ LocalizationService
 |------|------|------|------|
 | 布局方案 | 自定义 HStack + NSViewRepresentable ResizeHandle | NavigationSplitView | 支持自定义拖拽阈值（140px 自动隐藏 Sidebar）、单文件模式无 Sidebar、圆角 Detail 区域；SwiftUI DragGesture 在 macOS 上不可靠 |
 | 窗口样式 | .windowStyle(.hiddenTitleBar) + 内嵌 TitleBar | 系统 NSToolbar (.toolbar) | 支持圆角 Detail 区域和自定义拖拽区域；系统 .toolbar 无法实现 Buddy 风格布局 |
-| Markdown 渲染 | cmark-gfm + WKWebView (v2.x) | Textual / MarkdownUI | 完整 GFM 扩展，支持 Mermaid/PlantUML/KaTeX/Prism.js，WKWebView 原生选择 |
+| Markdown 渲染 | cmark-gfm + WebPage (macOS 26) | Textual / MarkdownUI | 完整 GFM 扩展，支持 Mermaid/PlantUML/KaTeX/Prism.js，WebPage 原生 SwiftUI 集成 |
 | 状态管理 | @Observable (macOS 26+) | ObservableObject | macOS 26 原生支持，更简洁，无需 @Published |
 | 目录树渲染 | 递归 DisclosureGroup | OutlineGroup | 更灵活的自定义行样式控制 |
 | 本地化方案 | 自定义字典 + Environment | Apple String Catalog | 支持动态语言切换，不依赖编译时字符串目录 |
@@ -196,7 +196,7 @@ LocalizationService
 ## 7. 已知注意事项
 
 - **视图重建**：同一类型视图替换内容时 SwiftUI 可能不触发 `.onAppear`，需用 `.id(fileURL)` 强制重建视图
-- **WKWebView 渲染**：JS/CSS 资源已本地打包，Mermaid/KaTeX/Prism.js 无需网络；PlantUML 需要网络连接
+- **WebPage 渲染**：macOS 26 原生 SwiftUI WebView API，JS/CSS 资源已本地打包，Mermaid/KaTeX/Prism.js 无需网络；PlantUML 需要网络连接
 - **Swift 6 严格并发**：需处理 Sendable 合规性和 actor 隔离，ViewModel 需标注 `@MainActor`
 - **自定义布局窗口 resize 状态同步**：窗口 resize 时需注意 sidebarWidth 累积偏移问题
 - **全屏模式适配**：`.hiddenTitleBar` 模式下全屏时需处理红绿灯行为（红绿灯区域宽度从 76px 变为 32px）和 TitleBar 的自动隐藏/显示

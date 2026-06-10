@@ -75,7 +75,7 @@ WWDC25 发布了全新的 `WebView` + `WebPage` SwiftUI 原生 API：
 |------|-----|
 | 显示网页内容 | `WebView(url:)` 或 `WebView(page)` |
 | 加载/控制/通信 | `WebPage`（`@Observable` 类） |
-| 加载 HTML | `page.loadHTMLString(_:baseURL:)` |
+| 加载 HTML | `page.load(html:baseURL:)` |
 | JS 通信 | `page.callJavaScript()` |
 | 自定义 URL Scheme | `URLSchemeHandler` 协议 |
 | 滚动同步 | `webViewScrollPosition` 修饰符 + `onScrollGeometryChange` |

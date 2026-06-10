@@ -173,26 +173,29 @@ WindowGroup
 - 默认选中「渲染」（可在设置中配置默认模式）
 - 仅在有文件选中时可用，否则灰显
 
-### 3.3 渲染视图（RenderedMarkdownView）
+### 3.3 渲染视图（WebViewMarkdownView）
 
-- 使用 Textual 的 `StructuredText` 视图渲染 Markdown 内容
+- 使用 macOS 26 的 `WebPage` + `WebView` SwiftUI 原生 API 渲染 Markdown 内容
+- cmark-gfm 解析 Markdown 源码生成 HTML，注入 `data-line` 和 heading id 属性
+- 通过 `URLSchemeHandler`（macOS 26）加载本地 `mr://` 资源（CSS、JS、图片）
 - 支持标准 Markdown + GFM 扩展（表格、任务列表、删除线等）
-- 使用 `.textual.structuredTextStyle(.gitHub)` 预设 GitHub 风格
-- 自适应深色/浅色模式
-- 代码块语法高亮（Textual 内置）
-- 链接点击 → 在系统默认浏览器中打开（通过 NSWorkspace.shared.open）
+- 支持 Mermaid 图表、KaTeX 数学公式、Prism.js 代码高亮、PlantUML 图表
+- 链接点击 → 在系统默认浏览器中打开（通过 `WebPage.NavigationDeciding` 拦截）
 - 使用 `.id(fileURL)` 确保文件切换时视图正确重建
 - 内容区 padding 可配置（默认 20pt，范围 8-40pt）
-- 原生文本选择：`.textual.textSelection(.enabled)`
+- 通过 `.webViewScrollPosition` 实现精确滚动同步
+- 通过 `.webViewTextSelection(.enabled)` 支持原生文本选择
+- App 启动时 WebPage 预热（冷启动 ~120ms → 热启动 ~15-20ms）
 
 ### 3.4 原文视图（RawMarkdownView）
 
-- 使用 SwiftUI TextEditor + 等宽字体（SF Mono）
+- 使用 NSTextView（SyntaxHighlightedEditor）+ 等宽字体（SF Mono）
+- 语法高亮通过正则表达式实现（MarkdownSyntaxHighlighter，~740 行）
 - 默认启用 Word Wrap（不出现横向滚动条）
-- 支持文本选择和复制
+- 支持文本选择、复制、编辑和保存
 - 字体大小可配置（默认 13pt，范围 10-24pt）
+- Per-file undo（通过 ObjC runtime swizzling NSWindow.undoManager）
 - 行号显示（P2，未实现）
-- 语法高亮（P2，未实现）
 
 ### 3.5 大纲面板（OutlineView）
 
@@ -465,5 +468,5 @@ Buddy Light, Codex Light, Catppuccin Latte, GitHub Light, Gruvbox Light, Kanagaw
 - 不做同步/云端功能
 - 不支持多窗口（首版）
 - 不支持插件系统
-- 最低系统版本：macOS 15.0 (Sequoia)
+- 最低系统版本：macOS 26.0 (Tahoe)
 - Swift 6.0 严格并发
