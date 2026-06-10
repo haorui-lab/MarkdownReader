@@ -5,6 +5,17 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.8] - 2026-06-10
+
+### 新增
+
+- **自定义关于面板**：新增 AboutWindowController + AboutView，展示应用图标、版本号、15 项功能特性列表、技术栈和网站链接，替换系统默认关于面板
+- **关于面板本地化**：LocalizationService 新增 19 个 about* 本地化键，覆盖简中/繁中/英文三语
+
+### 变更
+
+- **README 开源致谢**：新增「致谢」章节，列出 cmark-gfm、swift-markdown、KaTeX、Mermaid、Prism.js、PlantUML 等核心开源库，感谢 linux.do 社区的反馈与支持
+
 ## [2.0.7] - 2026-06-10
 
 ### 新增
