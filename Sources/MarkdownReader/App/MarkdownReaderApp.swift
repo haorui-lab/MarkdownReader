@@ -142,6 +142,12 @@ struct MarkdownReaderApp: App {
         .windowResizability(.automatic)
         .commands {
             // 设置菜单：Cmd+, → 切换窗口内设置状态
+            CommandGroup(replacing: .appInfo) {
+                Button(L10n.tr(.aboutTitle, language: language)) {
+                    AboutWindowController.show(language: language)
+                }
+            }
+
             CommandGroup(replacing: .appSettings) {
                 Button(L10n.tr(.settingsMenuLabel, language: language)) {
                     NotificationCenter.default.post(name: .toggleSettings, object: nil)

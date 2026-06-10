@@ -229,6 +229,25 @@ public enum L10n {
         case viewZoomIn
         case viewZoomOut
         case viewZoomReset
+        case aboutTitle
+        case aboutDescription
+        case aboutRendering
+        case aboutMermaid
+        case aboutPlantUML
+        case aboutKatex
+        case aboutPrism
+        case aboutQuickLook
+        case aboutEdit
+        case aboutFileTree
+        case aboutOutline
+        case aboutThemes
+        case aboutI18n
+        case aboutCLI
+        case aboutPDF
+        case aboutFindReplace
+        case aboutZoom
+        case aboutCredits
+        case aboutWebsite
     }
 
     // MARK: - 翻译字典
@@ -387,6 +406,25 @@ public enum L10n {
         .viewZoomIn: "Zoom In",
         .viewZoomOut: "Zoom Out",
         .viewZoomReset: "Actual Size",
+        .aboutTitle: "About Markdown Reader",
+        .aboutDescription: "A quiet native macOS Markdown reader — not another editor.",
+        .aboutRendering: "cmark-gfm + WKWebView rendering with full GFM extensions",
+        .aboutMermaid: "Mermaid diagrams: flowcharts, sequences, gantt charts and more",
+        .aboutPlantUML: "PlantUML diagrams rendered as SVG (requires network)",
+        .aboutKatex: "KaTeX rendering for LaTeX inline and block math",
+        .aboutPrism: "Prism.js syntax highlighting for 30+ languages",
+        .aboutQuickLook: "Finder Quick Look preview for Markdown files",
+        .aboutEdit: "Edit source directly, Cmd+S to save, auto-retain unsaved changes",
+        .aboutFileTree: "Recursive file tree with keyboard navigation and context menu",
+        .aboutOutline: "Auto-extracted heading outline for quick navigation",
+        .aboutThemes: "33 themes (20 dark + 13 light) with custom colors and contrast",
+        .aboutI18n: "Simplified Chinese, Traditional Chinese, English",
+        .aboutCLI: "mdr command-line tool to open files from Terminal",
+        .aboutPDF: "Export rendered content to PDF",
+        .aboutFindReplace: "Find & replace with regex support",
+        .aboutZoom: "Zoom in/out, range 0.3–3.0, auto-restore on reload",
+        .aboutCredits: "Built with SwiftUI, cmark-gfm, WKWebView, KaTeX, Mermaid, Prism.js",
+        .aboutWebsite: "Website",
     ]
 
     private static let zhCN: [Key: String] = [
@@ -543,6 +581,25 @@ public enum L10n {
         .viewZoomIn: "放大",
         .viewZoomOut: "缩小",
         .viewZoomReset: "实际大小",
+        .aboutTitle: "关于 Markdown Reader",
+        .aboutDescription: "一个安静的原生 macOS Markdown 阅读器——不是又一个编辑器。",
+        .aboutRendering: "cmark-gfm + WKWebView 渲染引擎，完整 GFM 扩展语法",
+        .aboutMermaid: "Mermaid 图表：流程图、时序图、甘特图等",
+        .aboutPlantUML: "PlantUML 图表自动渲染为 SVG（需要网络）",
+        .aboutKatex: "KaTeX 渲染 LaTeX 行内和块级公式",
+        .aboutPrism: "Prism.js 30+ 语言语法高亮",
+        .aboutQuickLook: "Finder 中按空格预览 Markdown 渲染效果",
+        .aboutEdit: "直接编辑原文，Cmd+S 保存，自动保留未保存内容",
+        .aboutFileTree: "递归文件树，键盘导航，右键菜单",
+        .aboutOutline: "自动提取标题大纲，点击快速跳转",
+        .aboutThemes: "33 套主题（20 深色 + 13 浅色），自定义配色和对比度",
+        .aboutI18n: "简体中文、繁体中文、英文",
+        .aboutCLI: "mdr 命令行工具，终端直接打开文件",
+        .aboutPDF: "渲染内容导出为 PDF",
+        .aboutFindReplace: "查找替换，支持正则表达式",
+        .aboutZoom: "视图缩放，范围 0.3–3.0，自动恢复缩放级别",
+        .aboutCredits: "基于 SwiftUI、cmark-gfm、WKWebView、KaTeX、Mermaid、Prism.js 构建",
+        .aboutWebsite: "网站",
     ]
 
     private static let zhTW: [Key: String] = [
@@ -699,6 +756,25 @@ public enum L10n {
         .viewZoomIn: "放大",
         .viewZoomOut: "縮小",
         .viewZoomReset: "實際大小",
+        .aboutTitle: "關於 Markdown Reader",
+        .aboutDescription: "一個安靜的原生 macOS Markdown 閱讀器——不是又一個編輯器。",
+        .aboutRendering: "cmark-gfm + WKWebView 渲染引擎，完整 GFM 擴展語法",
+        .aboutMermaid: "Mermaid 圖表：流程圖、時序圖、甘特圖等",
+        .aboutPlantUML: "PlantUML 圖表自動渲染為 SVG（需要網路）",
+        .aboutKatex: "KaTeX 渲染 LaTeX 行內和區塊公式",
+        .aboutPrism: "Prism.js 30+ 語言語法高亮",
+        .aboutQuickLook: "Finder 中按空白鍵預覽 Markdown 渲染效果",
+        .aboutEdit: "直接編輯原始內容，Cmd+S 儲存，自動保留未儲存變更",
+        .aboutFileTree: "遞迴檔案樹，鍵盤導航，右鍵選單",
+        .aboutOutline: "自動提取標題大綱，點擊快速跳轉",
+        .aboutThemes: "33 套主題（20 深色 + 13 淺色），自訂配色和對比度",
+        .aboutI18n: "简体中文、繁體中文、English",
+        .aboutCLI: "mdr 命令列工具，終端機直接開啟檔案",
+        .aboutPDF: "渲染內容匯出為 PDF",
+        .aboutFindReplace: "尋找取代，支援規則表達式",
+        .aboutZoom: "檢視縮放，範圍 0.3–3.0，自動恢復縮放級別",
+        .aboutCredits: "基於 SwiftUI、cmark-gfm、WKWebView、KaTeX、Mermaid、Prism.js 建構",
+        .aboutWebsite: "網站",
     ]
 
     // MARK: - 查找
