@@ -5,9 +5,9 @@
         <img class="hero-icon" src="{{ site.baseurl }}/assets/img/icon.png" alt="Markdown Reader" width="72" height="72">
         <h1 class="hero-title">Markdown Reader</h1>
       </div>
-      <p class="hero-tagline">不是又一个全能编辑器，只是一个安静的阅读器</p>
+      <p class="hero-tagline">{{ include.t.hero_tagline }}</p>
       <div class="hero-actions">
-        <a class="hero-download-btn" href="{{ site.app.download_url }}">免费下载</a>
+        <a class="hero-download-btn" href="{{ site.app.download_url }}">{{ include.t.free_download }}</a>
         <span class="hero-badge">macOS {{ site.app.macos_version }}+</span>
       </div>
     </div>
@@ -22,7 +22,7 @@
           <span class="macos-titlebar-text">Markdown Reader</span>
         </div>
         <div class="macos-body">
-          <img class="hero-screenshot" src="{{ site.baseurl }}/assets/img/hero-screenshot.png" alt="Markdown Reader 截图">
+          <img class="hero-screenshot" src="{{ site.baseurl }}/assets/img/hero-screenshot.png" alt="Markdown Reader">
         </div>
       </div>
     </div>

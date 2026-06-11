@@ -7,6 +7,18 @@ url: "https://davidhoo.github.io"
 baseurl: "/MarkdownReader"
 lang: zh-CN
 
+# 多语言支持
+languages:
+  - code: zh-CN
+    name: 简体中文
+  - code: zh-TW
+    name: 繁體中文
+  - code: en
+    name: English
+  - code: ja
+    name: 日本語
+default_lang: zh-CN
+
 # MarkdownReader 应用信息
 app:
   name: Markdown Reader

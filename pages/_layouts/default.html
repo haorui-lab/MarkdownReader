@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ page.lang | default: site.lang }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,17 +7,61 @@
   <meta name="description" content="{{ site.description }}">
   <link rel="icon" href="{{ site.baseurl }}/assets/img/favicon.png">
   <link rel="stylesheet" href="{{ site.baseurl }}/assets/css/style.css">
+  {% comment %}Build hreflang links based on current page name{% endcomment %}
+  {% assign current_lang = page.lang | default: site.default_lang %}
+  {% assign page_name = page.name %}
+  <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ site.baseurl }}/{{ page_name }}">
+  <link rel="alternate" hreflang="zh-CN" href="{{ site.url }}{{ site.baseurl }}/{{ page_name }}">
+  <link rel="alternate" hreflang="zh-TW" href="{{ site.url }}{{ site.baseurl }}/zh-TW/{{ page_name }}">
+  <link rel="alternate" hreflang="en" href="{{ site.url }}{{ site.baseurl }}/en/{{ page_name }}">
+  <link rel="alternate" hreflang="ja" href="{{ site.url }}{{ site.baseurl }}/ja/{{ page_name }}">
   {% seo %}
 </head>
 <body>
+  {% comment %}Build language switcher links that preserve current page{% endcomment %}
+  {% assign switch_page = page.name %}
+  <nav class="lang-switcher" aria-label="Language">
+    <div class="lang-switcher-current">
+      {% for l in site.languages %}
+        {% if l.code == current_lang %}{{ l.name }}{% endif %}
+      {% endfor %}
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="lang-switcher-dropdown">
+      {% for l in site.languages %}
+        {% if l.code == 'zh-CN' %}
+          {% assign lang_url = switch_page | prepend: '/' | prepend: site.baseurl %}
+        {% else %}
+          {% capture lang_url %}{{ site.baseurl }}/{{ l.code }}/{{ switch_page }}{% endcapture %}
+        {% endif %}
+        <a href="{{ lang_url }}" class="lang-switcher-option{% if l.code == current_lang %} active{% endif %}" lang="{{ l.code }}">{{ l.name }}</a>
+      {% endfor %}
+    </div>
+  </nav>
+  {% assign t = site.data.i18n[page.lang] | default: site.data.i18n[site.default_lang] %}
   {% if page.show_home_sections %}
-  {% include hero.html %}
-  {% include features.html %}
-  {% include themes.html %}
-  {% include download.html %}
+  {% include hero.html t=t %}
+  {% include features.html t=t %}
+  {% include themes.html t=t %}
+  {% include download.html t=t %}
   {% endif %}
   {{ content }}
-  {% include footer.html %}
+  {% include footer.html t=t %}
   <script src="{{ site.baseurl }}/assets/js/themes.js" defer></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var switcher = document.querySelector('.lang-switcher');
+    var current = switcher && switcher.querySelector('.lang-switcher-current');
+    if (switcher && current) {
+      current.addEventListener('click', function(e) {
+        e.stopPropagation();
+        switcher.classList.toggle('open');
+      });
+      document.addEventListener('click', function() {
+        switcher.classList.remove('open');
+      });
+    }
+  });
+  </script>
 </body>
 </html>

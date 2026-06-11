@@ -1,3 +1,5 @@
+**[简体中文](README.md)** | [繁體中文](README.zh-TW.md) | [English](README.en.md) | [日本語](README.ja.md)
+
 # Markdown Reader
 
 > 不是又一个全能编辑器，只是一个安静的阅读器。

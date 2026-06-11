@@ -1,12 +1,12 @@
 ---
 title: 404
 layout: default
-lang: zh-CN
+lang: ja
 ---
 
 <section class="not-found">
   <h1>404</h1>
   {% assign t = site.data.i18n[page.lang] | default: site.data.i18n[site.default_lang] %}
   <p>{{ t.not_found_title }}</p>
-  <a href="{{ site.baseurl }}/" class="hero-download-btn">{{ t.not_found_home }}</a>
+  <a href="{{ site.baseurl }}/ja/" class="hero-download-btn">{{ t.not_found_home }}</a>
 </section>

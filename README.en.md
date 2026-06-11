@@ -1,0 +1,103 @@
+[简体中文](README.md) | [繁體中文](README.zh-TW.md) | **[English](README.en.md)** | [日本語](README.ja.md)
+
+# Markdown Reader
+
+> Not another all-in-one editor, just a quiet reader.
+![screenshot](screenshot.png)
+
+![macOS 26+](https://img.shields.io/badge/macOS-26+-blue)
+![License: MIT](https://img.shields.io/badge/License-MIT-green)
+
+---
+
+## Why This One?
+
+There are more and more Markdown tools out there, each packed with features — real-time collaboration, cloud sync, plugin ecosystems... But most of the time, you just want to **quickly open a .md file and read it quietly**.
+
+Markdown Reader is built for exactly that:
+
+- **Zero friction** — No sign-up, no login, no complex configuration. Just open and read
+- **Instant launch** — Native macOS app. Fast startup, fast switching, smooth reading
+- **Focused on reading** — Three-pane layout: file tree + rendered view + outline navigation. See document structure at a glance
+- **Tiny and lightweight** — DMG installer under 10MB, takes minimal space
+
+When you don't need writing, collaboration, or fancy features — just want to **quickly view a Markdown document** — this is the right choice.
+
+---
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| WKWebView rendering | cmark-gfm + WKWebView rendering, full GFM extension support |
+| Mermaid diagrams | Flowcharts, sequence diagrams, Gantt charts — rendered locally |
+| PlantUML diagrams | PlantUML syntax support, auto-renders as SVG (requires network) |
+| Math formulas | KaTeX renders LaTeX inline and block formulas |
+| Prism.js syntax highlighting | 30+ language syntax highlighting via Prism.js |
+| Quick Look preview | Select a .md file in Finder and press Space to preview — no app launch needed |
+| Live editing | Edit in source mode, Cmd+S to save, unsaved content preserved when switching files |
+| File tree | Recursively browse folders, keyboard navigation, right-click to create/rename/delete |
+| Outline navigation | Auto-extract heading hierarchy, click to jump — efficient for long documents |
+| 33 themes | 20 dark + 13 light, including Markdown Preview Enhanced style themes, with custom color and contrast controls |
+| Multi-language | Simplified Chinese, Traditional Chinese, English — auto-follows system |
+| CLI tool | `mdr` command to open Markdown files directly from the terminal |
+| Window restoration | Remembers last browsing position, auto-restores on reopen |
+
+---
+
+## Shortcuts
+
+| Shortcut | Function |
+|----------|----------|
+| `Cmd+O` | Open folder / file |
+| `Cmd+N` | New file |
+| `Cmd+S` | Save file |
+| `Cmd+Option+E` | Export PDF |
+| `Cmd+,` | Open settings |
+| `Cmd+\` | Toggle sidebar |
+| `Cmd+Shift+E` | Rendered mode |
+| `Cmd+Shift+R` | Source mode |
+| `Cmd++` | Zoom in |
+| `Cmd+-` | Zoom out |
+| `Cmd+0` | Actual size |
+| `Cmd+F` | Find |
+| `Cmd+G` | Find next |
+| `Cmd+Shift+G` | Find previous |
+| `Cmd+Option+F` | Find and replace |
+
+---
+
+## Installation
+
+### Download
+
+Go to [Releases](https://github.com/davidhoo/MarkdownReader/releases) to download the latest DMG, then drag it to your Applications folder.
+
+### System Requirements
+
+macOS 26 (Tahoe) or later.
+
+---
+
+## Official Website
+
+[https://davidhoo.github.io/MarkdownReader/](https://davidhoo.github.io/MarkdownReader/)
+
+---
+
+## Acknowledgments
+
+Markdown Reader is built on the following open-source projects:
+
+- [cmark-gfm](https://github.com/github/cmark-gfm) — GitHub Flavored Markdown parsing and rendering engine
+- [swift-markdown](https://github.com/apple/swift-markdown) — Apple's Swift Markdown parsing library (based on cmark-gfm)
+- [KaTeX](https://katex.org/) — Fast LaTeX math formula rendering
+- [Mermaid](https://mermaid.js.org/) — Text-based diagram generation (flowcharts, sequence diagrams, Gantt charts, etc.)
+- [Prism.js](https://prismjs.com/) — Lightweight code syntax highlighting
+- [PlantUML](https://plantuml.com/) — Open-source UML diagram rendering
+
+Special thanks to the [linux.do](https://linux.do/) community for their feedback and support.
+
+---
+
+MIT License

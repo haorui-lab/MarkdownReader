@@ -1,11 +1,11 @@
 <section class="themes-section" id="themes">
-  <h2 class="section-title">33 套主题，随心切换</h2>
-  <p class="section-subtitle">从 Dracula 到 Catppuccin，从 Nord 到 Tokyo Night——20 深色 + 13 浅色，你的桌面你做主</p>
+  <h2 class="section-title">{{ include.t.themes_title }}</h2>
+  <p class="section-subtitle">{{ include.t.themes_subtitle }}</p>
 
   <div class="theme-filter">
-    <button class="theme-filter-btn active" data-filter="all">全部</button>
-    <button class="theme-filter-btn" data-filter="dark">深色</button>
-    <button class="theme-filter-btn" data-filter="light">浅色</button>
+    <button class="theme-filter-btn active" data-filter="all">{{ include.t.themes_filter_all }}</button>
+    <button class="theme-filter-btn" data-filter="dark">{{ include.t.themes_filter_dark }}</button>
+    <button class="theme-filter-btn" data-filter="light">{{ include.t.themes_filter_light }}</button>
   </div>
 
   <div class="themes-grid" id="themes-grid">
