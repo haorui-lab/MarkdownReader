@@ -245,6 +245,16 @@ struct MarkdownReaderApp: App {
                 }
                 .keyboardShortcut("f", modifiers: [.command, .option])
             }
+
+            // 帮助菜单
+            CommandMenu(L10n.tr(.helpMenuLabel, language: language)) {
+                Button(L10n.tr(.helpMarkdownReader, language: language)) {
+                    if let url = URL(string: "https://davidhoo.github.io/MarkdownReader/help.html") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .keyboardShortcut("?", modifiers: .command)
+            }
         }
     }
 }

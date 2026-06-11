@@ -1,0 +1,256 @@
+---
+title: 帮助
+layout: default
+show_home_sections: false
+---
+
+<section class="help-page">
+  <!-- 顶部导航 -->
+  <nav class="help-nav">
+    <div class="help-nav-inner">
+      <a href="{{ site.baseurl }}/" class="help-back-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        返回首页
+      </a>
+      <span class="help-nav-title">Markdown Reader 帮助</span>
+    </div>
+  </nav>
+
+  <!-- 锚点目录 -->
+  <div class="help-toc">
+    <div class="help-toc-inner">
+      <a href="#quick-start" class="help-toc-link">快速入门</a>
+      <a href="#shortcuts" class="help-toc-link">快捷键</a>
+      <a href="#features" class="help-toc-link">功能详解</a>
+      <a href="#themes" class="help-toc-link">主题与外观</a>
+      <a href="#diagrams" class="help-toc-link">图表与公式</a>
+      <a href="#cli" class="help-toc-link">命令行工具</a>
+      <a href="#quicklook" class="help-toc-link">Quick Look</a>
+      <a href="#export-pdf" class="help-toc-link">导出 PDF</a>
+      <a href="#faq" class="help-toc-link">常见问题</a>
+    </div>
+  </div>
+
+  <div class="help-content">
+
+    <!-- 快速入门 -->
+    <section id="quick-start" class="help-section">
+      <h2 class="help-section-title">快速入门</h2>
+      <div class="help-steps">
+        <div class="help-step">
+          <div class="help-step-num">1</div>
+          <div class="help-step-body">
+            <h3>打开文件或文件夹</h3>
+            <p>按 <kbd>⌘O</kbd> 或点击工具栏打开按钮，选择 .md 文件或文件夹。也可以直接将文件或文件夹拖拽到窗口中。</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <div class="help-step-num">2</div>
+          <div class="help-step-body">
+            <h3>阅读和导航</h3>
+            <p>左侧文件树浏览目录结构，右侧渲染视图阅读内容。点击工具栏大纲按钮或按 <kbd>⌘\</kbd> 切换侧边栏。</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <div class="help-step-num">3</div>
+          <div class="help-step-body">
+            <h3>编辑与保存</h3>
+            <p>切换到原文模式（<kbd>⇧⌘R</kbd>）直接编辑，按 <kbd>⌘S</kbd> 保存。切换文件时未保存内容会自动保留。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 快捷键 -->
+    <section id="shortcuts" class="help-section">
+      <h2 class="help-section-title">快捷键参考</h2>
+      <div class="help-table-wrap">
+        <table class="help-table">
+          <thead>
+            <tr><th>快捷键</th><th>功能</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><kbd>⌘O</kbd></td><td>打开目录 / 文件</td></tr>
+            <tr><td><kbd>⌘N</kbd></td><td>新建文件</td></tr>
+            <tr><td><kbd>⌘S</kbd></td><td>保存文件</td></tr>
+            <tr><td><kbd>⌥⌘E</kbd></td><td>导出 PDF</td></tr>
+            <tr><td><kbd>⌘,</kbd></td><td>打开设置</td></tr>
+            <tr><td><kbd>⌘\</kbd></td><td>切换侧边栏</td></tr>
+            <tr><td><kbd>⇧⌘E</kbd></td><td>渲染模式</td></tr>
+            <tr><td><kbd>⇧⌘R</kbd></td><td>原文模式</td></tr>
+            <tr><td><kbd>⌘+</kbd></td><td>放大</td></tr>
+            <tr><td><kbd>⌘-</kbd></td><td>缩小</td></tr>
+            <tr><td><kbd>⌘0</kbd></td><td>实际大小</td></tr>
+            <tr><td><kbd>⌘F</kbd></td><td>查找</td></tr>
+            <tr><td><kbd>⌘G</kbd></td><td>查找下一个</td></tr>
+            <tr><td><kbd>⇧⌘G</kbd></td><td>查找上一个</td></tr>
+            <tr><td><kbd>⌥⌘F</kbd></td><td>查找与替换</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 功能详解 -->
+    <section id="features" class="help-section">
+      <h2 class="help-section-title">功能详解</h2>
+
+      <div class="help-feature">
+        <h3>渲染视图</h3>
+        <p>默认的渲染模式使用 cmark-gfm 引擎解析 Markdown，通过 WKWebView 渲染为富文本。支持完整 GFM 扩展语法，包括表格、任务列表、删除线、自动链接等。</p>
+      </div>
+
+      <div class="help-feature">
+        <h3>原文编辑</h3>
+        <p>按 <kbd>⇧⌘R</kbd> 切换到原文模式，直接编辑 Markdown 源码。支持语法高亮（Prism.js 引擎，30+ 语言）。按 <kbd>⌘S</kbd> 保存。切换到其他文件时，未保存的内容会自动保留，返回时恢复。</p>
+      </div>
+
+      <div class="help-feature">
+        <h3>文件树</h3>
+        <p>打开文件夹后，左侧显示递归文件树。支持键盘导航（方向键选择，回车打开）。右键菜单提供新建文件/子目录、重命名、移动、删除等操作。可在设置中开启显示隐藏文件和非 Markdown 文件。</p>
+      </div>
+
+      <div class="help-feature">
+        <h3>大纲导航</h3>
+        <p>自动提取当前文档的标题层级结构。点击大纲中的标题可快速跳转到对应位置，阅读长文档更高效。</p>
+      </div>
+
+      <div class="help-feature">
+        <h3>查找与替换</h3>
+        <p>按 <kbd>⌘F</kbd> 打开查找栏。支持区分大小写、全词匹配、正则表达式。<kbd>⌥⌘F</kbd> 打开查找与替换模式。</p>
+      </div>
+
+      <div class="help-feature">
+        <h3>视图缩放</h3>
+        <p>使用 <kbd>⌘+</kbd> / <kbd>⌘-</kbd> 缩放内容，范围 0.3x–3.0x。按 <kbd>⌘0</kbd> 恢复实际大小。缩放级别在重新加载时自动恢复。</p>
+      </div>
+    </section>
+
+    <!-- 主题与外观 -->
+    <section id="themes" class="help-section">
+      <h2 class="help-section-title">主题与外观</h2>
+
+      <div class="help-feature">
+        <h3>主题模式</h3>
+        <p>在设置 → 外观中，可选择浅色、深色或跟随系统三种模式。应用会立即切换外观。</p>
+      </div>
+
+      <div class="help-feature">
+        <h3>配色方案</h3>
+        <p>提供 33 套预设配色方案（20 深色 + 13 浅色），包括 Dracula、Catppuccin、Nord、Tokyo Night、Markdown Preview Enhanced 风格等。每种模式有独立的配色，切换模式时自动应用对应方案。</p>
+      </div>
+
+      <div class="help-feature">
+        <h3>自定义颜色</h3>
+        <p>在设置 → 外观 → 自定义颜色中，可单独调整背景色、文字色、强调色、成功色、危险色。自定义颜色会覆盖当前方案中的对应项。</p>
+      </div>
+
+      <div class="help-feature">
+        <h3>对比度调节</h3>
+        <p>提供低/高两档对比度选项，调整背景与前景层之间的视觉对比。</p>
+      </div>
+    </section>
+
+    <!-- 图表与公式 -->
+    <section id="diagrams" class="help-section">
+      <h2 class="help-section-title">图表与公式</h2>
+
+      <div class="help-feature">
+        <h3>Mermaid 图表</h3>
+        <p>在代码块中使用 <code>mermaid</code> 语言标识，即可渲染流程图、时序图、甘特图等。本地渲染，无需网络。</p>
+        <pre class="help-code">```mermaid
+graph LR
+    A[开始] --&gt; B{判断}
+    B --&gt;|是| C[执行]
+    B --&gt;|否| D[结束]
+```</pre>
+      </div>
+
+      <div class="help-feature">
+        <h3>数学公式 (KaTeX)</h3>
+        <p>使用 <code>$...$</code> 包裹行内公式，<code>$$...$$</code> 包裹块级公式。</p>
+        <pre class="help-code">行内公式：$E = mc^2$
+
+块级公式：
+$$\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}$$</pre>
+      </div>
+
+      <div class="help-feature">
+        <h3>PlantUML 图表</h3>
+        <p>在代码块中使用 <code>plantuml</code> 语言标识，自动渲染为 SVG 图表。需要网络连接 PlantUML 服务器。</p>
+        <pre class="help-code">```plantuml
+@startuml
+Alice -&gt; Bob: Hello
+Bob --&gt; Alice: Hi
+@enduml
+```</pre>
+      </div>
+    </section>
+
+    <!-- 命令行工具 -->
+    <section id="cli" class="help-section">
+      <h2 class="help-section-title">命令行工具 mdr</h2>
+
+      <div class="help-feature">
+        <h3>安装</h3>
+        <p>打开 设置 → 通用 → 命令行工具，点击「安装」按钮。安装完成后，<code>mdr</code> 命令即可在终端中使用。</p>
+      </div>
+
+      <div class="help-feature">
+        <h3>使用</h3>
+        <pre class="help-code"># 打开单个文件
+mdr README.md
+
+# 打开多个文件
+mdr doc1.md doc2.md
+
+# 打开文件夹
+mdr ./docs</pre>
+      </div>
+    </section>
+
+    <!-- Quick Look -->
+    <section id="quicklook" class="help-section">
+      <h2 class="help-section-title">Quick Look 预览</h2>
+      <div class="help-feature">
+        <p>在 Finder 中选中 .md 文件，按空格键即可预览渲染效果，无需打开应用。此功能需在 设置 → 通用 → Quick Look 预览 中启用。</p>
+      </div>
+    </section>
+
+    <!-- 导出 PDF -->
+    <section id="export-pdf" class="help-section">
+      <h2 class="help-section-title">导出 PDF</h2>
+      <div class="help-feature">
+        <p>按 <kbd>⌥⌘E</kbd> 或使用菜单 文件 → 导出 PDF，将当前渲染内容导出为 PDF 文件。导出的 PDF 保留当前主题的样式和配色。</p>
+      </div>
+    </section>
+
+    <!-- 常见问题 -->
+    <section id="faq" class="help-section">
+      <h2 class="help-section-title">常见问题</h2>
+
+      <div class="help-faq">
+        <details>
+          <summary>支持哪些文件格式？</summary>
+          <p>支持 <code>.md</code>、<code>.markdown</code>、<code>.mdown</code>、<code>.mkd</code> 等 Markdown 格式文件。</p>
+        </details>
+        <details>
+          <summary>系统要求是什么？</summary>
+          <p>macOS 26 (Tahoe) 或更高版本。</p>
+        </details>
+        <details>
+          <summary>PlantUML 图表无法渲染？</summary>
+          <p>PlantUML 渲染需要网络连接，请确保可以访问 PlantUML 服务器。如果处于离线环境，Mermaid 图表仍可正常使用（本地渲染）。</p>
+        </details>
+        <details>
+          <summary>如何设置 Markdown Reader 为默认打开程序？</summary>
+          <p>打开 设置 → 通用 → 默认 Markdown 打开程序，点击「设为默认」即可。也可以右键 .md 文件 → 显示简介 → 打开方式 → 选择 Markdown Reader → 点击「全部更改」。</p>
+        </details>
+        <details>
+          <summary>如何反馈问题或建议？</summary>
+          <p>欢迎在 <a href="{{ site.app.repo_url }}/issues" target="_blank" rel="noopener">GitHub Issues</a> 中提交反馈。</p>
+        </details>
+      </div>
+    </section>
+
+  </div>
+</section>

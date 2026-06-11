@@ -248,6 +248,8 @@ public enum L10n {
         case aboutZoom
         case aboutCredits
         case aboutWebsite
+        case helpMenuLabel
+        case helpMarkdownReader
     }
 
     // MARK: - 翻译字典
@@ -425,6 +427,8 @@ public enum L10n {
         .aboutZoom: "Zoom in/out, range 0.3–3.0, auto-restore on reload",
         .aboutCredits: "Built with SwiftUI, cmark-gfm, WKWebView, KaTeX, Mermaid, Prism.js",
         .aboutWebsite: "Website",
+        .helpMenuLabel: "Help",
+        .helpMarkdownReader: "Markdown Reader Help",
     ]
 
     private static let zhCN: [Key: String] = [
@@ -600,6 +604,8 @@ public enum L10n {
         .aboutZoom: "视图缩放，范围 0.3–3.0，自动恢复缩放级别",
         .aboutCredits: "基于 SwiftUI、cmark-gfm、WKWebView、KaTeX、Mermaid、Prism.js 构建",
         .aboutWebsite: "网站",
+        .helpMenuLabel: "帮助",
+        .helpMarkdownReader: "Markdown Reader 帮助",
     ]
 
     private static let zhTW: [Key: String] = [
@@ -775,6 +781,8 @@ public enum L10n {
         .aboutZoom: "檢視縮放，範圍 0.3–3.0，自動恢復縮放級別",
         .aboutCredits: "基於 SwiftUI、cmark-gfm、WKWebView、KaTeX、Mermaid、Prism.js 建構",
         .aboutWebsite: "網站",
+        .helpMenuLabel: "說明",
+        .helpMarkdownReader: "Markdown Reader 說明",
     ]
 
     // MARK: - 查找
