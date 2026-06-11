@@ -246,8 +246,8 @@ struct MarkdownReaderApp: App {
                 .keyboardShortcut("f", modifiers: [.command, .option])
             }
 
-            // 帮助菜单
-            CommandMenu(L10n.tr(.helpMenuLabel, language: language)) {
+            // 帮助菜单：替换系统默认帮助搜索，改为打开在线帮助页面
+            CommandGroup(replacing: .help) {
                 Button(L10n.tr(.helpMarkdownReader, language: language)) {
                     if let url = URL(string: "https://davidhoo.github.io/MarkdownReader/help.html") {
                         NSWorkspace.shared.open(url)
