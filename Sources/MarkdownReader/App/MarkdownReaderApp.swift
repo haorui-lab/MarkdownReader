@@ -267,6 +267,7 @@ extension Notification.Name {
     static let switchToRaw = Notification.Name("com.markdownreader.switchToRaw")
     static let openDirectory = Notification.Name("com.markdownreader.openDirectory")
     static let openFile = Notification.Name("com.markdownreader.openFile")
+    static let openLinkedMarkdownFile = Notification.Name("com.markdownreader.openLinkedMarkdownFile")
     static let toggleSettings = Notification.Name("com.markdownreader.toggleSettings")
     static let newFile = Notification.Name("com.markdownreader.newFile")
     static let saveFile = Notification.Name("com.markdownreader.saveFile")
