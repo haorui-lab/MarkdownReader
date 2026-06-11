@@ -5,6 +5,19 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.9] - 2026-06-11
+
+### 新增
+
+- **帮助菜单**：替换系统默认帮助搜索，新增「Markdown Reader 帮助」菜单项（Cmd+?），点击打开在线帮助页面
+- **帮助页面**：新增 GitHub Pages 帮助页面（`pages/help.html`），展示快捷键、功能说明等使用指南
+- **帮助菜单本地化**：LocalizationService 新增 `helpMenuLabel`、`helpMarkdownReader` 键，覆盖简中/繁中/英文三语
+
+### 变更
+
+- **README 快捷键文档**：补充快捷键说明章节
+- **项目文档同步**：修正架构文档中的渲染引擎描述、项目结构、依赖和版本号
+
 ## [2.0.8] - 2026-06-10
 
 ### 新增
