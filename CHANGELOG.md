@@ -5,6 +5,33 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.1.0] - 2026-06-12
+
+### 新增
+
+- **命令面板**：新增 Cmd+P 命令面板，支持按文件名快速搜索并打开目录树中的 Markdown 文件
+  - 命令面板视图（CommandPaletteView）与视图模型（CommandPaletteViewModel），支持文件搜索、键盘导航（↑↓）、Enter 打开
+  - 搜索结果实时过滤，支持模糊匹配文件名和相对路径
+  - 目录变化时自动刷新文件缓存
+  - 半透明遮罩 + 标题栏下方居中浮层设计
+  - 菜单栏新增「命令面板…」菜单项，快捷键 Cmd+P
+- **右键「在访达中打开」**：文件树中目录和文件的右键菜单新增「在访达中打开」选项（Reveal in Finder / 在访达中打开 / 在 Finder 中打開）
+  - 目录：使用 `NSWorkspace.shared.selectFile(_:inFileViewerRootedAtPath:)` 在 Finder 中显示目录
+  - 文件：使用 `NSWorkspace.shared.activateFileViewerSelecting(_:)` 在 Finder 中选中文件
+- **本地 Markdown 链接点击打开**：渲染视图中点击本地 Markdown 文件链接时，自动在应用内打开目标文件
+  - 支持 `mr://` 和 `file://` 两种 URL scheme 的本地 Markdown 链接
+  - 目录模式下，目标文件在根目录内时仅切换文件树选中项，不退回单文件模式
+  - 目标文件在根目录外时，切换为单文件模式打开
+- **官网多语言支持**：GitHub Pages 官网新增英文、日文、繁体中文三个语言版本
+  - 新增 `pages/_data/i18n/` 目录下的四语翻译文件（zh-CN / en / ja / zh-TW）
+  - 新增 `pages/en/`、`pages/ja/`、`pages/zh-TW/` 多语言页面（首页、帮助页、404 页）
+  - 布局和样式优化，支持 RTL 语言切换
+- **README 多语言版本**：新增英文（README.en.md）、日文（README.ja.md）、繁体中文（README.zh-TW.md）README 文件
+
+### 修复
+
+- **本地 Markdown 链接导航**：通过文档加载流程（DocumentViewModel.loadFile）打开本地 Markdown 链接文件，确保状态一致性
+
 ## [2.0.9] - 2026-06-11
 
 ### 新增

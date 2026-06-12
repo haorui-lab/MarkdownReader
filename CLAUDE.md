@@ -6,7 +6,7 @@
 
 MarkdownReader 是一个原生 macOS Markdown 阅读器应用。不是编辑器，只是一个安静的阅读器。三栏布局：左侧目录树 + 中间渲染视图 + 右侧大纲导航。
 
-- **当前版本**: 2.0.9
+- **当前版本**: 2.1.0
 - **最低部署**: macOS 26.0
 - **Bundle ID**: `com.markdownreader.app`
 - **许可证**: MIT
@@ -38,7 +38,7 @@ Sources/
 │       ├── ThemeColors.swift              # 主题色彩派生（5 色 → 12+ 语义 token）
 │       ├── OutlineService.swift           # Markdown 标题解析
 │       ├── LanguageService.swift          # 系统语言检测
-│       ├── LocalizationService.swift      # L10n 字典（80+ 键，3 语言）
+│       ├── LocalizationService.swift      # L10n 字典（90+ 键，3 语言）  // v2.1.0: 新增 commandPalette*/contextMenuOpenInFinder
 │       └── ColorExtensions.swift          # Color.mix 等颜色工具
 ├── MarkdownReader/                 # 主应用
 │   ├── App/
@@ -55,6 +55,7 @@ Sources/
 │   │   ├── DocumentViewModel.swift       # 文档加载/保存/脏跟踪/文件监控（~650 行）
 │   │   ├── FileTreeViewModel.swift       # 目录树管理/键盘导航/文件操作
 │   │   ├── FindReplaceViewModel.swift    # 查找替换状态管理
+│   │   ├── CommandPaletteViewModel.swift # 命令面板文件搜索
 │   │   └── UpdateViewModel.swift         # 自动更新检查/弹窗状态
 │   ├── Views/
 │   │   ├── ContentView.swift             # 主布局（~937 行），ViewModifier 事件处理模式
@@ -66,6 +67,7 @@ Sources/
 │   │   ├── OutlineView.swift             # 右侧大纲面板
 │   │   ├── SettingsView.swift            # 设置视图
 │   │   ├── FindReplaceBar.swift          # 浮动查找替换栏
+│   │   ├── CommandPaletteView.swift      # 命令面板（Cmd+P 文件搜索）
 │   │   ├── UpdateView.swift              # 自动更新弹窗
 │   │   ├── AboutView.swift               # 关于面板视图
 │   │   ├── ResizeHandle.swift            # 侧边栏拖拽（NSViewRepresentable）

@@ -41,6 +41,7 @@ When you don't need writing, collaboration, or fancy features — just want to *
 | 33 themes | 20 dark + 13 light, including Markdown Preview Enhanced style themes, with custom color and contrast controls |
 | Multi-language | Simplified Chinese, Traditional Chinese, English — auto-follows system |
 | CLI tool | `mdr` command to open Markdown files directly from the terminal |
+| Command palette | `Cmd+P` to quickly search and open files in the file tree |
 | Window restoration | Remembers last browsing position, auto-restores on reopen |
 
 ---
@@ -64,6 +65,7 @@ When you don't need writing, collaboration, or fancy features — just want to *
 | `Cmd+G` | Find next |
 | `Cmd+Shift+G` | Find previous |
 | `Cmd+Option+F` | Find and replace |
+| `Cmd+P` | Command palette |
 
 ---
 
