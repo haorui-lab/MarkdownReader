@@ -4,11 +4,11 @@ import Foundation
 struct FileService: Sendable {
 
     /// 已知的 Markdown 文件扩展名（不含 .txt，.txt 需内容检测）
-    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd"]
+    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdown"]
 
     /// 需要在目录树中显示为 Markdown 类型的扩展名（含 .txt）
     /// .txt 文件在目录树中显示 Markdown 图标，实际加载时再做内容检测
-    static let treeDisplayExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "txt"]
+    static let treeDisplayExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdown", "txt"]
 
     /// 判断文件扩展名是否为已知的 Markdown 类型（不含 .txt）
     /// - Parameter url: 文件 URL

@@ -193,6 +193,11 @@ struct MarkdownReaderApp: App {
                 }
                 .keyboardShortcut("\\", modifiers: .command)
 
+                Button(L10n.tr(.commandPaletteTitle, language: language)) {
+                    NotificationCenter.default.post(name: .toggleCommandPalette, object: nil)
+                }
+                .keyboardShortcut("p", modifiers: .command)
+
                 Divider()
 
                 Button(L10n.tr(.displayModeRendered, language: language)) {
@@ -286,4 +291,5 @@ extension Notification.Name {
     static let zoomIn = Notification.Name("com.markdownreader.zoomIn")
     static let zoomOut = Notification.Name("com.markdownreader.zoomOut")
     static let zoomReset = Notification.Name("com.markdownreader.zoomReset")
+    static let toggleCommandPalette = Notification.Name("com.markdownreader.toggleCommandPalette")
 }

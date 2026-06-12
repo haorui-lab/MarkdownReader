@@ -63,6 +63,29 @@ enum OpenPanelHelper {
         isPanelShowing = false
     }
 
+    /// 显示打开文件夹面板，仅允许选择目录
+    /// - Parameter language: 当前界面语言，用于面板提示文本
+    @MainActor
+    static func showDirectory(language: Language) {
+        guard !isPanelShowing else { return }
+        isPanelShowing = true
+
+        NSApp.activate(ignoringOtherApps: true)
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = L10n.tr(.open, language: language)
+        panel.allowedContentTypes = [.folder]
+
+        if panel.runModal() == .OK, let url = panel.url {
+            NotificationCenter.default.post(name: .openDirectory, object: url)
+        }
+
+        isPanelShowing = false
+    }
+
     /// 显示导出 PDF 面板，让用户选择保存位置
     /// - Parameters:
     ///   - language: 当前界面语言

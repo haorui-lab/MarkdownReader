@@ -90,6 +90,11 @@ final class AppViewModel {
     /// 查找面板是否可见
     var isFindBarVisible: Bool = false
 
+    // MARK: - 命令面板状态
+
+    /// 命令面板是否可见
+    var isCommandPaletteVisible: Bool = false
+
     // MARK: - 方法
 
     /// 切换 Sidebar 显隐
@@ -130,6 +135,29 @@ final class AppViewModel {
     func hideFindBar() {
         withAnimation(.easeOut(duration: 0.2)) {
             isFindBarVisible = false
+        }
+    }
+
+    /// 显示命令面板
+    func showCommandPalette() {
+        withAnimation(.easeOut(duration: 0.15)) {
+            isCommandPaletteVisible = true
+        }
+    }
+
+    /// 隐藏命令面板
+    func hideCommandPalette() {
+        withAnimation(.easeOut(duration: 0.15)) {
+            isCommandPaletteVisible = false
+        }
+    }
+
+    /// 切换命令面板
+    func toggleCommandPalette() {
+        if isCommandPaletteVisible {
+            hideCommandPalette()
+        } else {
+            showCommandPalette()
         }
     }
 

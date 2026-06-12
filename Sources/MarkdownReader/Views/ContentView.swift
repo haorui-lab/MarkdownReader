@@ -16,6 +16,8 @@ struct ContentView: View {
     @State private var themeColors: ThemeColors = ThemeColors.from(
         SettingsModel.shared.resolvedTheme
     )
+    /// 命令面板 ViewModel
+    @State private var commandPaletteViewModel = CommandPaletteViewModel()
 
     var body: some View {
         mainLayout
@@ -164,6 +166,51 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: appViewModel.isShowingSettings)
+        .overlay {
+            if appViewModel.isCommandPaletteVisible {
+                ZStack {
+                    // 半透明背景（点击关闭）
+                    Color.black.opacity(0.2)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            appViewModel.hideCommandPalette()
+                        }
+
+                    // 命令面板（标题栏下方居中）
+                    VStack(spacing: 0) {
+                        Spacer().frame(height: 58)
+                        CommandPaletteView(viewModel: commandPaletteViewModel)
+                        Spacer()
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleCommandPalette)) { _ in
+            toggleCommandPalette()
+        }
+        .onChange(of: commandPaletteViewModel.isVisible) { _, visible in
+            if !visible && appViewModel.isCommandPaletteVisible {
+                appViewModel.hideCommandPalette()
+            }
+        }
+        .onChange(of: appViewModel.isCommandPaletteVisible) { _, visible in
+            if visible {
+                commandPaletteViewModel.configure(
+                    appViewModel: appViewModel,
+                    fileTreeViewModel: fileTreeViewModel,
+                    documentViewModel: documentViewModel,
+                    settings: settings
+                )
+                if !commandPaletteViewModel.isVisible {
+                    commandPaletteViewModel.show()
+                }
+            } else {
+                if commandPaletteViewModel.isVisible {
+                    commandPaletteViewModel.hide()
+                }
+            }
+        }
     }
 
     // MARK: - 方法
@@ -175,6 +222,7 @@ struct ContentView: View {
     /// 重置所有 ViewModel 状态，显示欢迎页
     /// 用于 Dock 点击重新激活时，避免恢复旧窗口的文档内容
     private func resetToWelcome() {
+        commandPaletteViewModel.hide()
         appViewModel.rootDirectory = nil
         appViewModel.isSingleFileMode = false
         appViewModel.singleFileURL = nil
@@ -208,6 +256,25 @@ struct ContentView: View {
             settings.addRecentItem(url: file, isDirectory: false)
         } else {
             resetToWelcome()
+        }
+    }
+
+    // MARK: - 命令面板切换
+
+    /// 切换命令面板（指定模式）
+    private func toggleCommandPalette() {
+        if appViewModel.isCommandPaletteVisible {
+            appViewModel.hideCommandPalette()
+            commandPaletteViewModel.hide()
+        } else {
+            commandPaletteViewModel.configure(
+                appViewModel: appViewModel,
+                fileTreeViewModel: fileTreeViewModel,
+                documentViewModel: documentViewModel,
+                settings: settings
+            )
+            commandPaletteViewModel.show()
+            appViewModel.showCommandPalette()
         }
     }
 }

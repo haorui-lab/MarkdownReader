@@ -175,6 +175,9 @@ public enum L10n {
         case contextMenuCopyPath
 
         // 右键菜单 - 对话框
+        case contextMenuOpenInFinder
+
+        // 右键菜单 - 对话框
         case renameTitle
         case renameMessage
         case renameEmptyName
@@ -250,6 +253,13 @@ public enum L10n {
         case aboutWebsite
         case helpMenuLabel
         case helpMarkdownReader
+        case commandPaletteTitle
+        case commandPalettePlaceholder
+        case commandPaletteNoResults
+        case commandPaletteOpenFile
+        case commandPaletteOpenFolder
+        case commandPaletteFilePlaceholder
+        case commandPaletteCommandTitle
     }
 
     // MARK: - 翻译字典
@@ -363,6 +373,7 @@ public enum L10n {
         .contextMenuDelete: "Move to Trash",
         .contextMenuReload: "Reload",
         .contextMenuCopyPath: "Copy Path",
+        .contextMenuOpenInFinder: "Reveal in Finder",
         .renameTitle: "Rename",
         .renameMessage: "Enter a new name for \"{name}\":",
         .renameEmptyName: "Name cannot be empty.",
@@ -429,6 +440,13 @@ public enum L10n {
         .aboutWebsite: "Website",
         .helpMenuLabel: "Help",
         .helpMarkdownReader: "Markdown Reader Help",
+        .commandPaletteTitle: "Command Palette",
+        .commandPalettePlaceholder: "Search files and commands\u{2026}",
+        .commandPaletteNoResults: "No results found",
+        .commandPaletteOpenFile: "Open File\u{2026}",
+        .commandPaletteOpenFolder: "Open Folder\u{2026}",
+        .commandPaletteFilePlaceholder: "Search files by name\u{2026}",
+        .commandPaletteCommandTitle: "Command Palette\u{2026}",
     ]
 
     private static let zhCN: [Key: String] = [
@@ -540,6 +558,7 @@ public enum L10n {
         .contextMenuDelete: "移到废纸篓",
         .contextMenuReload: "重新加载",
         .contextMenuCopyPath: "复制路径",
+        .contextMenuOpenInFinder: "在访达中打开",
         .renameTitle: "重命名",
         .renameMessage: "输入「{name}」的新名称：",
         .renameEmptyName: "名称不能为空。",
@@ -606,6 +625,13 @@ public enum L10n {
         .aboutWebsite: "网站",
         .helpMenuLabel: "帮助",
         .helpMarkdownReader: "Markdown Reader 帮助",
+        .commandPaletteTitle: "命令面板",
+        .commandPalettePlaceholder: "搜索文件和命令\u{2026}",
+        .commandPaletteNoResults: "未找到结果",
+        .commandPaletteOpenFile: "打开文件\u{2026}",
+        .commandPaletteOpenFolder: "打开文件夹\u{2026}",
+        .commandPaletteFilePlaceholder: "按名称搜索文件\u{2026}",
+        .commandPaletteCommandTitle: "命令面板\u{2026}",
     ]
 
     private static let zhTW: [Key: String] = [
@@ -717,6 +743,7 @@ public enum L10n {
         .contextMenuDelete: "移到垃圾桶",
         .contextMenuReload: "重新載入",
         .contextMenuCopyPath: "複製路徑",
+        .contextMenuOpenInFinder: "在 Finder 中打開",
         .renameTitle: "重新命名",
         .renameMessage: "輸入「{name}」的新名稱：",
         .renameEmptyName: "名稱不能為空。",
@@ -783,6 +810,13 @@ public enum L10n {
         .aboutWebsite: "網站",
         .helpMenuLabel: "說明",
         .helpMarkdownReader: "Markdown Reader 說明",
+        .commandPaletteTitle: "命令面板",
+        .commandPalettePlaceholder: "搜尋檔案和命令\u{2026}",
+        .commandPaletteNoResults: "未找到結果",
+        .commandPaletteOpenFile: "開啟檔案\u{2026}",
+        .commandPaletteOpenFolder: "開啟資料夾\u{2026}",
+        .commandPaletteFilePlaceholder: "按名稱搜尋檔案\u{2026}",
+        .commandPaletteCommandTitle: "命令面板\u{2026}",
     ]
 
     // MARK: - 查找
