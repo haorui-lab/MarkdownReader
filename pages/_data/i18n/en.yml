@@ -76,6 +76,8 @@ help_qs_read_title: "2. Read & Navigate"
 help_qs_read_desc: "Browse directory structure in the file tree on the left, read content in the rendered view on the right. Click the outline button or press ⌘\\ to toggle the sidebar."
 help_qs_edit_title: "3. Edit & Save"
 help_qs_edit_desc: "Switch to source mode (⇧⌘R) to edit directly, press ⌘S to save. Unsaved content is automatically preserved when switching files."
+help_qs_command_palette_title: "4. Quick Open Files"
+help_qs_command_palette_desc: "Press ⌘P to open the command palette. Type a filename for fuzzy search, use ↑↓ to select, and Enter to open. Faster than browsing the file tree."
 
 help_shortcuts_title: "Keyboard Shortcuts"
 help_shortcuts_subtitle: "Work faster with the keyboard"

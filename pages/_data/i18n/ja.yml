@@ -76,6 +76,8 @@ help_qs_read_title: "2. 読む・ナビゲート"
 help_qs_read_desc: "左側のファイルツリーでディレクトリ構造を閲覧し、右側のレンダリングビューで内容を読む。アウトラインボタンまたは ⌘\\ でサイドバーを切替。"
 help_qs_edit_title: "3. 編集・保存"
 help_qs_edit_desc: "ソースモード（⇧⌘R）に切り替えて直接編集、⌘S で保存。ファイル切り替え時に未保存内容は自動保持されます。"
+help_qs_command_palette_title: "4. クイックオープン"
+help_qs_command_palette_desc: "⌘P でコマンドパレットを開き、ファイル名を入力してファジー検索。↑↓ で選択、Enter で開く。ファイルツリーより素早くアクセス。"
 
 help_shortcuts_title: "キーボードショートカット"
 help_shortcuts_subtitle: "キーボードでより効率的に"

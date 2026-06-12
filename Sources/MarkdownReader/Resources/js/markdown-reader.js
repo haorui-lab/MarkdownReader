@@ -349,17 +349,18 @@
       if (mathElements.length === 0) return;
       if (typeof katex === 'undefined') return;
 
-      mathElements.forEach(block => {
-        const pre = block.parentElement;
-        const isInline = !pre || pre.tagName !== 'PRE';
-        const mathContent = block.textContent;
+    mathElements.forEach(block => {
+      const pre = block.parentElement;
+      const isInline = !pre || pre.tagName !== 'PRE';
+      const mathContent = block.textContent;
 
-        if (isInline) {
-          const span = document.createElement('span');
+      if (isInline) {
+        const span = document.createElement('span');
+          const isDisplayMode = block.dataset.display === 'true';
           span.className = 'katex-inline';
           try {
             katex.render(mathContent, span, {
-              displayMode: false,
+              displayMode: isDisplayMode,
               throwOnError: false,
               output: 'html'
             });

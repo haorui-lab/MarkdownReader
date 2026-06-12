@@ -143,6 +143,7 @@ public enum MarkdownHTMLService {
 
         // 扩展语法预处理（顺序重要：先处理占多行的，再处理行内的）
         result = preprocessBlockMath(result)
+        result = preprocessInlineDoubleMath(result)
         result = preprocessInlineMath(result)
         result = preprocessFootnotes(result)
         result = preprocessHighlight(result)
@@ -208,8 +209,9 @@ public enum MarkdownHTMLService {
 
     /// 将 $$...$$ 块级数学公式转换为 ```math 代码块格式，复用已有 KaTeX 渲染管线
     private static func preprocessBlockMath(_ content: String) -> String {
-        // 匹配 $$...\n...\n$$ 或同一行的 $$...$$
-        let pattern = #"\$\$([\s\S]+?)\$\$"#
+        // 仅匹配独占一行的 $$...$$（块级公式）
+        // 行内的 $$...$$ 由 preprocessInlineDoubleMath 处理
+        let pattern = #"(?m)^\s*\$\$([\s\S]+?)\$\$\s*$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return content }
         let nsRange = NSRange(content.startIndex..., in: content)
         let matches = regex.matches(in: content, options: [], range: nsRange)
@@ -219,7 +221,29 @@ public enum MarkdownHTMLService {
             guard let range = Range(match.range, in: result),
                   let contentRange = Range(match.range(at: 1), in: result) else { continue }
             let mathContent = String(result[contentRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-            let replacement = "```math\n\(mathContent)\n```"
+            // 确保 ```math 块前后有空行，避免相邻块级公式产生 ``````math 合并问题
+            let replacement = "\n```math\n\(mathContent)\n```\n"
+            result.replaceSubrange(range, with: replacement)
+        }
+        return result
+    }
+
+    /// 将行内 $$...$$ 数学公式转换为 HTML span，由 JS KaTeX 渲染
+    /// 处理不在行首的 $$...$$（即行内双美元符号公式），渲染为 displayMode 行内公式
+    private static func preprocessInlineDoubleMath(_ content: String) -> String {
+        // 匹配行内 $$...$$（行内双美元符号公式，允许 $$ 后有空格）
+        let pattern = #"(?<!\$)\$\$(.+?)\$\$(?!\$)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { return content }
+        let nsRange = NSRange(content.startIndex..., in: content)
+        let matches = regex.matches(in: content, options: [], range: nsRange)
+
+        var result = content
+        for match in matches.reversed() {
+            guard let range = Range(match.range, in: result),
+                  let contentRange = Range(match.range(at: 1), in: result) else { continue }
+            let mathContent = String(result[contentRange]).trimmingCharacters(in: .whitespacesAndNewlines).htmlEscaped
+            // 使用 data-display="true" 标记为 display 模式
+            let replacement = "<code class=\"language-math inline\" data-display=\"true\">\(mathContent)</code>"
             result.replaceSubrange(range, with: replacement)
         }
         return result

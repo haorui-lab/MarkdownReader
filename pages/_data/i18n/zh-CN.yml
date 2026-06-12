@@ -76,6 +76,8 @@ help_qs_read_title: "2. 阅读和导航"
 help_qs_read_desc: "左侧文件树浏览目录结构，右侧渲染视图阅读内容。点击工具栏大纲按钮或按 ⌘\\ 切换侧边栏。"
 help_qs_edit_title: "3. 编辑与保存"
 help_qs_edit_desc: "切换到原文模式（⇧⌘R）直接编辑，按 ⌘S 保存。切换文件时未保存内容会自动保留。"
+help_qs_command_palette_title: "4. 快速打开文件"
+help_qs_command_palette_desc: "按 ⌘P 打开命令面板，输入文件名模糊搜索，↑↓ 选择，Enter 打开。比浏览目录树更快。"
 
 help_shortcuts_title: "快捷键参考"
 help_shortcuts_subtitle: "键盘操作更高效"
