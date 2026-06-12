@@ -508,6 +508,10 @@ private struct FileOpenModifier: ViewModifier {
                     // 不需要显式调用 loadFile — selectedFileURL 变化会触发 SelectionChangeModifier 统一加载
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .openLinkedMarkdownFile)) { notification in
+                guard let url = notification.object as? URL else { return }
+                handleLinkedMarkdownFileOpen(url.standardizedFileURL)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .newFile)) { _ in
                 if documentViewModel.isUntitled && documentViewModel.isDirty {
                     handleUnsavedChangesBeforeAction { proceed in
@@ -559,6 +563,46 @@ private struct FileOpenModifier: ViewModifier {
                     }
                 }
             }
+    }
+
+    /// 打开渲染页内点击的本地 Markdown 链接。
+    /// 当前处于目录模式且目标文件仍在根目录内时，只切换文件树选中项，避免退回单文件模式。
+    private func handleLinkedMarkdownFileOpen(_ url: URL) {
+        if documentViewModel.currentFileURL?.standardizedFileURL == url {
+            return
+        }
+
+        if documentViewModel.isUntitled && documentViewModel.isDirty {
+            handleUnsavedChangesBeforeAction { proceed in
+                guard proceed else { return }
+                openLinkedMarkdownFile(url)
+            }
+        } else {
+            openLinkedMarkdownFile(url)
+        }
+    }
+
+    private func openLinkedMarkdownFile(_ url: URL) {
+        if let rootDir = appViewModel.rootDirectory,
+           isFileURL(url, inside: rootDir) {
+            fileTreeViewModel.selectedFileURL = url
+            settings.lastOpenedFile = url
+            settings.addRecentItem(url: url, isDirectory: false)
+            return
+        }
+
+        appViewModel.openSingleFile(url)
+        fileTreeViewModel.selectedFileURL = url
+        settings.lastOpenedDirectory = nil
+        settings.lastOpenedFile = url
+        settings.addRecentItem(url: url, isDirectory: false)
+    }
+
+    private func isFileURL(_ fileURL: URL, inside directoryURL: URL) -> Bool {
+        let filePath = fileURL.standardizedFileURL.path
+        let directoryPath = directoryURL.standardizedFileURL.path
+        let prefix = directoryPath.hasSuffix("/") ? directoryPath : "\(directoryPath)/"
+        return filePath.hasPrefix(prefix)
     }
 
     /// 通用未保存修改弹窗处理

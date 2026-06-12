@@ -140,7 +140,7 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
     if $DISTRIBUTION; then
         # 分发模式：需要真实的 Developer ID 证书
         if [[ "$SIGN_IDENTITY" == "auto" ]]; then
-            SIGN_IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed -n 's/.*"\(.*\)"/\1/p')
+            SIGN_IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed -n 's/.*"\(.*\)"/\1/p' || true)
             if [[ -z "$SIGN_IDENTITY" ]]; then
                 echo "❌ 分发模式需要 Developer ID Application 证书，未找到"
                 exit 1
@@ -151,7 +151,7 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
         # 开发模式：如果指定了签名身份则使用，否则 ad-hoc
         if [[ "$SIGN_IDENTITY" == "auto" ]]; then
             # 优先查找 Apple Development / Developer ID Application 证书
-            RESOLVED_IDENTITY=$(security find-identity -v -p codesigning | grep -E "Apple Development|Developer ID Application" | head -1 | sed -n 's/.*"\(.*\)"/\1/p')
+            RESOLVED_IDENTITY=$(security find-identity -v -p codesigning | grep -E "Apple Development|Developer ID Application" | head -1 | sed -n 's/.*"\(.*\)"/\1/p' || true)
             if [[ -n "$RESOLVED_IDENTITY" ]]; then
                 SIGN_IDENTITY="$RESOLVED_IDENTITY"
                 echo "🔑 开发模式: 使用检测到的签名身份: $SIGN_IDENTITY"

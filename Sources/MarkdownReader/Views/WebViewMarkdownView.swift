@@ -9,12 +9,33 @@ class MarkdownNavigationDecider: WebPage.NavigationDeciding {
     ) async -> WKNavigationActionPolicy {
         guard let url = action.request.url else { return .allow }
 
-        if url.scheme == "mr" || url.scheme == "about" {
+        if url.scheme == "mr" {
+            if action.target?.isMainFrame == true,
+               action.navigationType == .linkActivated,
+               let fileURL = localFileURL(fromMRURL: url),
+               FileService.isTreeDisplayExtension(fileURL),
+               FileManager.default.fileExists(atPath: fileURL.path) {
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .openLinkedMarkdownFile, object: fileURL)
+                }
+                return .cancel
+            }
+            return .allow
+        }
+
+        if url.scheme == "about" {
             return .allow
         }
 
         if url.scheme == "file" {
             if action.target?.isMainFrame == true && action.navigationType == .linkActivated {
+                let fileURL = url.standardizedFileURL
+                if FileService.isTreeDisplayExtension(fileURL),
+                   FileManager.default.fileExists(atPath: fileURL.path) {
+                    await MainActor.run {
+                        NotificationCenter.default.post(name: .openLinkedMarkdownFile, object: fileURL)
+                    }
+                }
                 return .cancel
             }
             return .allow
@@ -30,6 +51,19 @@ class MarkdownNavigationDecider: WebPage.NavigationDeciding {
 
     func decideAuthenticationChallengeDisposition(for challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
         (.performDefaultHandling, nil)
+    }
+
+    private func localFileURL(fromMRURL url: URL) -> URL? {
+        var path = url.path
+        guard !path.isEmpty else { return nil }
+
+        if path.hasPrefix("/") {
+            path = String(path.dropFirst())
+        }
+
+        // mr:///css/... is a bundled resource, while mr:////Users/... is a local absolute path.
+        guard path.hasPrefix("/") else { return nil }
+        return URL(fileURLWithPath: path).standardizedFileURL
     }
 }
 
