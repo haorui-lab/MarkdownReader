@@ -5,6 +5,21 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.1.2] - 2026-06-12
+
+### 修复
+
+- **行内 `$$` 公式渲染为 display 模式**：修复行内 `$$...$$` 数学公式被错误渲染为块级 display 模式的问题
+  - `preprocessBlockMath` 正则改为仅匹配独占一行的 `$$...$$`（真正的块级公式）
+  - 新增 `preprocessInlineDoubleMath` 处理行内 `$$...$$`，通过 `data-display="true"` 标记渲染为 display 模式行内公式
+  - JS 渲染器读取 `data-display` 属性决定 KaTeX `displayMode` 参数
+
+### 变更
+
+- **官网首页**：功能区新增命令面板卡片
+- **官网帮助页**：帮助页和 i18n 添加命令面板内容
+- **官网帮助页 HTML**：修复功能区 HTML 闭合标签错误
+
 ## [2.1.0] - 2026-06-12
 
 ### 新增
