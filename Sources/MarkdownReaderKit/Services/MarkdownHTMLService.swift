@@ -137,11 +137,9 @@ public enum MarkdownHTMLService {
         var result = content
         result = stripYAMLFrontMatter(result)
 
-        // 保护代码区域（围栏代码块 + 行内代码），避免后续正则误伤
         var codeStore: [String] = []
         result = protectCodeRegions(result, store: &codeStore)
 
-        // 扩展语法预处理（顺序重要：先处理占多行的，再处理行内的）
         result = preprocessBlockMath(result)
         result = preprocessInlineDoubleMath(result)
         result = preprocessInlineMath(result)
@@ -149,8 +147,8 @@ public enum MarkdownHTMLService {
         result = preprocessHighlight(result)
         result = preprocessSuperscript(result)
         result = preprocessSubscript(result)
+        result = EmojiService.replaceEmojiShortcodes(result)
 
-        // 还原代码区域
         result = restoreCodeRegions(result, store: codeStore)
 
         return result
