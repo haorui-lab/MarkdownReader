@@ -505,7 +505,14 @@ final class DocumentViewModel {
 
         do {
             let diskContent = try await fileService.readFile(at: url)
-            // 与当前快照比较，若不同则处理外部修改
+            // 与当前内存内容比较：若磁盘内容与内存一致，无需任何操作
+            // 这涵盖了保存后 FSEventStream 延迟回调的场景（isSaving 已重置但快照已更新）
+            if diskContent == content {
+                // 磁盘与内存一致，同步快照以防漂移
+                diskContentSnapshot[url] = diskContent
+                return
+            }
+            // 磁盘内容与内存不同，属于外部修改
             if let snapshot = diskContentSnapshot[url], diskContent != snapshot {
                 if !isDirty {
                     // 用户未修改过，自动静默刷新

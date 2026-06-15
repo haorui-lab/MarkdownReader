@@ -370,16 +370,25 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         // 更新内容（仅在内容确实不同时）
         let currentContent = textView.string
         if currentContent != content {
-            textView.undoManager?.disableUndoRegistration()
-            defer { textView.undoManager?.enableUndoRegistration() }
-
-            if let textStorage = textView.textStorage {
-                let fullRange = NSRange(location: 0, length: textStorage.length)
-                textStorage.beginEditing()
-                textStorage.replaceCharacters(in: fullRange, with: content)
-                textStorage.endEditing()
+            // 当 NSTextView 是第一响应者（用户正在编辑）时，以编辑器内容为准
+            // 同步回 content Binding，防止 SwiftUI 重渲染用旧值覆盖编辑器
+            // 这是修复"保存后内容回退"bug 的关键：保存触发 isDirty 变化，
+            // 导致 updateNSView 被调用，如果此时 content 与 textView.string 不同，
+            // 不应用 content 覆盖 textView，而应反过来同步
+            if let window = textView.window, window.firstResponder === textView {
+                content = currentContent
             } else {
-                textView.string = content
+                textView.undoManager?.disableUndoRegistration()
+                defer { textView.undoManager?.enableUndoRegistration() }
+
+                if let textStorage = textView.textStorage {
+                    let fullRange = NSRange(location: 0, length: textStorage.length)
+                    textStorage.beginEditing()
+                    textStorage.replaceCharacters(in: fullRange, with: content)
+                    textStorage.endEditing()
+                } else {
+                    textView.string = content
+                }
             }
         }
 
