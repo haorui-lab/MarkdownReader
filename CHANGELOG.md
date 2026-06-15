@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.1.6] - 2026-06-15
+
+### 修复
+
+- **保存面板重复弹出**：移除 WindowGroup 自动添加的默认 Save/Save As 菜单项，这些默认菜单项绑定 Cmd+S 会触发系统 NSSavePanel，与自定义的 `.saveFile` 通知机制冲突导致保存面板重复弹出
+- **另存为状态重置时序**：保存完成后才重置 `isSavePanelShowing` 标志，避免另存为尚未完成时标志已为 false 导致重入；用户取消保存面板时立即重置标志
+
 ## [2.1.5] - 2026-06-15
 
 ### 新增
