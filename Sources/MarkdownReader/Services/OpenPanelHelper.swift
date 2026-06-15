@@ -30,7 +30,7 @@ enum OpenPanelHelper {
     /// WindowGroup 可能创建多个 ContentView 实例同时监听通知，
     /// 即使已改为直接调用，仍保留此保护作为安全网
     @MainActor
-    private static var isPanelShowing = false
+    private(set) static var isPanelShowing = false
 
     /// 显示打开面板，用户选择后发送对应通知
     /// - Parameter language: 当前界面语言，用于面板提示文本
@@ -149,6 +149,7 @@ enum OpenPanelHelper {
         let panel = NSSavePanel()
         panel.prompt = L10n.tr(.save, language: language)
         panel.allowedContentTypes = Self.markdownContentTypes
+        panel.allowsOtherFileTypes = true
         panel.nameFieldStringValue = suggestedName
         panel.canCreateDirectories = true
 

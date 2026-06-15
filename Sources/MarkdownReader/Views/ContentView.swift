@@ -533,11 +533,17 @@ private struct FileOpenModifier: ViewModifier {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in
+                // 重入保护：如果正在保存或保存面板已显示，跳过
+                guard !documentViewModel.isSaving && !documentViewModel.isSavePanelShowing else { return }
                 Task {
                     await documentViewModel.save()
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .saveAsFile)) { _ in
+                // 重入保护：如果保存面板已经在显示，跳过
+                guard !documentViewModel.isSavePanelShowing else { return }
+                documentViewModel.isSavePanelShowing = true
+
                 let language = settings.languagePref.resolvedLanguage
                 let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
                 let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
@@ -562,6 +568,8 @@ private struct FileOpenModifier: ViewModifier {
                         settings.addRecentItem(url: saveURL, isDirectory: false)
                     }
                 }
+                // 保存面板关闭后重置标志
+                documentViewModel.isSavePanelShowing = false
             }
     }
 

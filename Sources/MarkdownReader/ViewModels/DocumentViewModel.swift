@@ -53,7 +53,10 @@ final class DocumentViewModel {
     var isFileModifiedExternally: Bool = false
 
     /// 是否正在保存（用于忽略自己保存触发的文件系统事件）
-    private var isSaving: Bool = false
+    private(set) var isSaving: Bool = false
+
+    /// 是否正在显示保存面板（防止重复弹窗）
+    var isSavePanelShowing: Bool = false
 
     /// 新建文件的临时目录
     static let untitledDirectory: URL = {
@@ -323,6 +326,8 @@ final class DocumentViewModel {
 
         // 未保存的新建文件需要另存为
         if isUntitled {
+            // 如果保存面板已经在显示，不重复发送通知
+            guard !isSavePanelShowing else { return false }
             NotificationCenter.default.post(name: .saveAsFile, object: nil)
             return false
         }
@@ -349,6 +354,9 @@ final class DocumentViewModel {
     /// - Parameter newURL: 用户选择的新保存位置
     func saveAs(to newURL: URL) async {
         do {
+            isSaving = true
+            defer { isSaving = false }
+
             let oldURL = currentFileURL
             try await fileService.writeFile(at: newURL, content: content)
 
