@@ -566,10 +566,14 @@ private struct FileOpenModifier: ViewModifier {
                         // 更新最近打开记录
                         settings.lastOpenedFile = saveURL
                         settings.addRecentItem(url: saveURL, isDirectory: false)
+
+                        // 保存完成后才重置标志，避免 saveAs 尚未完成时 isSavePanelShowing 已为 false
+                        documentViewModel.isSavePanelShowing = false
                     }
+                } else {
+                    // 用户取消了保存面板，立即重置标志
+                    documentViewModel.isSavePanelShowing = false
                 }
-                // 保存面板关闭后重置标志
-                documentViewModel.isSavePanelShowing = false
             }
     }
 
