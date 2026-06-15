@@ -5,6 +5,16 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.1.5] - 2026-06-15
+
+### 新增
+
+- **GitHub 风格 emoji shortcode 支持**：新增 EmojiService，在 Markdown 渲染时将 `:emoji:` 短代码自动替换为 Unicode emoji 字符
+  - 包含 240+ emoji shortcode 映射，覆盖笑脸与情感、手势与人物、动物与自然、天气与天体、食物与饮料、运动与活动、旅行与地点、物品与符号等分类
+  - 支持 `:smile:` `:rocket:` `:+1:` `:-1:` 等常见 GitHub emoji 语法
+  - 正则使用 lookahead/lookbehind 避免误匹配时间格式（如 `10:30`）
+  - 在 MarkdownHTMLService 预处理阶段、代码区域保护之后执行替换，确保代码块内不误替换
+
 ## [2.1.4] - 2026-06-15
 
 ### 修复
