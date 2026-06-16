@@ -112,6 +112,7 @@ public enum L10n {
 
         // 菜单
         case menuNewFile
+        case closeWindow
 
         // 未保存更改提醒
         case unsavedChangesTitle
@@ -330,6 +331,7 @@ public enum L10n {
         .reset: "Reset",
         .confirm: "OK",
         .menuNewFile: "New File",
+        .closeWindow: "Close Window",
         .unsavedChangesTitle: "Unsaved Changes",
         .unsavedChangesMessage: "Your changes will be lost if you don't save them. Do you want to save before closing?",
         .unsavedSave: "Save",
@@ -515,6 +517,7 @@ public enum L10n {
         .reset: "重置",
         .confirm: "确认",
         .menuNewFile: "新建文件",
+        .closeWindow: "关闭窗口",
         .unsavedChangesTitle: "未保存的更改",
         .unsavedChangesMessage: "如果不保存，您的更改将会丢失。关闭前是否保存？",
         .unsavedSave: "保存",
@@ -700,6 +703,7 @@ public enum L10n {
         .reset: "重設",
         .confirm: "確認",
         .menuNewFile: "新增檔案",
+        .closeWindow: "關閉視窗",
         .unsavedChangesTitle: "未儲存的變更",
         .unsavedChangesMessage: "如果不儲存，您的變更將會遺失。關閉前是否儲存？",
         .unsavedSave: "儲存",

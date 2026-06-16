@@ -189,7 +189,12 @@ struct MarkdownReaderApp: App {
             // 移除 WindowGroup 自动添加的默认 Save/Save As 菜单项
             // 这些默认菜单项绑定 Cmd+S，会触发系统自带的 NSSavePanel，
             // 与自定义的 .saveFile 通知机制冲突，导致保存面板重复弹出
-            CommandGroup(replacing: .saveItem) { }
+            CommandGroup(replacing: .saveItem) {
+                Button(L10n.tr(.closeWindow, language: language)) {
+                    NSApp.keyWindow?.performClose(nil)
+                }
+                .keyboardShortcut("w", modifiers: .command)
+            }
 
             // 视图菜单：Sidebar 切换
             CommandGroup(after: .toolbar) {
