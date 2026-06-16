@@ -261,6 +261,9 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
     var isFindBarVisible: Bool = false
     /// 光标行号变化回调（0-based 行号）
     var onCursorLineNumberChanged: ((Int) -> Void)?
+    /// 内容版本号，变化时强制用 ViewModel 内容覆盖编辑器（阻止 firstResponder 回写）
+    /// 用于 reload 操作：ViewModel 更新了 content 但 NSTextView 仍持有旧内容
+    var contentVersion: Int = 0
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -375,7 +378,12 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
             // 这是修复"保存后内容回退"bug 的关键：保存触发 isDirty 变化，
             // 导致 updateNSView 被调用，如果此时 content 与 textView.string 不同，
             // 不应用 content 覆盖 textView，而应反过来同步
-            if let window = textView.window, window.firstResponder === textView {
+            //
+            // 例外：当 contentVersion 变化时（reload/load 操作），说明 ViewModel
+            // 程序化更新了内容，此时必须用 ViewModel 的内容覆盖编辑器，
+            // 不允许 firstResponder 回写保护逻辑覆盖程序化更新
+            let isForcedUpdate = contentVersion != context.coordinator.lastContentVersion
+            if !isForcedUpdate, let window = textView.window, window.firstResponder === textView {
                 content = currentContent
             } else {
                 textView.undoManager?.disableUndoRegistration()
@@ -391,6 +399,8 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
                 }
             }
         }
+        // 同步 contentVersion 到 coordinator，避免同一版本重复触发强制更新
+        context.coordinator.lastContentVersion = contentVersion
 
         // 更新插入点颜色
         textView.insertionPointColor = themeColors.accent.nsColor
@@ -523,6 +533,8 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         var wasActive: Bool = false
         /// 上次记录的 appearance token，用于检测 appearance 变化
         var lastAppearanceToken: String?
+        /// 上次处理的 contentVersion，用于检测程序化内容更新（reload/load）
+        var lastContentVersion: Int = 0
 
         init(_ parent: SyntaxHighlightedEditor) {
             self.parent = parent

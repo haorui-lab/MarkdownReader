@@ -8,6 +8,10 @@ final class DocumentViewModel {
 
     // MARK: - 状态
 
+    /// 内容版本号，每次程序化更新（reload/load）时递增
+    /// 用于通知视图层强制刷新，避免 @Observable 因内容相同而跳过更新
+    var contentVersion: Int = 0
+
     /// 当前文档内容
     var content: String = "" {
         didSet {
@@ -125,6 +129,19 @@ final class DocumentViewModel {
     /// 加载文件内容
     /// - Parameter url: 文件 URL
     func loadFile(at url: URL) async {
+        // 如果是同一文件且被外部修改
+        if currentFileURL == url && isFileModifiedExternally {
+            if isDirty {
+                // 用户有未保存编辑，不自动 reload，保留当前编辑内容和外部修改标记
+                // 由 UI 的 reload 按钮流程处理（含确认弹窗）
+                return
+            } else {
+                // 用户没有编辑，静默 reload 是安全的
+                await reloadFromDisk()
+                return
+            }
+        }
+
         // 幂等保护：如果已经加载了同一文件且内容非空，跳过重复加载
         if currentFileURL == url && !content.isEmpty && fileError == nil {
             return
@@ -193,20 +210,54 @@ final class DocumentViewModel {
             let diskContent = try await fileService.readFile(at: url)
             currentFileURL = url
             fileName = url.lastPathComponent
+            // 保存之前的快照，用于判断缓存内容是否包含用户编辑
+            let previousSnapshot = diskContentSnapshot[url]
             // 保存磁盘内容快照，用于脏状态判断
             diskContentSnapshot[url] = diskContent
-            // 优先使用缓存内容（保留未保存的编辑）
-            // 缓存内容与 per-file UndoManager 的 undo 动作一致
-            if let cached = contentCache[url] {
-                content = cached
+
+            // 判断是否有未保存的编辑：缓存内容与之前的快照不同
+            let hasUnsavedEdits: Bool
+            if let cached = contentCache[url], let prev = previousSnapshot {
+                hasUnsavedEdits = (cached != prev)
             } else {
+                hasUnsavedEdits = false
+            }
+
+            // 判断磁盘是否被外部修改：磁盘内容与之前的快照不同
+            // previousSnapshot 为 nil 表示首次加载此文件，不存在"外部修改"概念
+            let diskChangedExternally: Bool
+            if let prev = previousSnapshot {
+                diskChangedExternally = (diskContent != prev)
+            } else {
+                diskChangedExternally = false
+            }
+
+            if hasUnsavedEdits, let cached = contentCache[url] {
+                if diskChangedExternally {
+                    // 用户有未保存编辑 且 磁盘也被外部修改 → 冲突场景
+                    // 保留用户缓存内容，但标记 isFileModifiedExternally = true
+                    // 显示 reload 按钮，让用户决定是否丢弃编辑加载磁盘新内容
+                    content = cached
+                    isFileModifiedExternally = true
+                } else {
+                    // 用户有未保存编辑，磁盘未变 → 正常恢复缓存
+                    content = cached
+                    isFileModifiedExternally = false
+                }
+            } else {
+                // 用户没有编辑，使用磁盘最新内容
+                // 无论缓存是否存在，都使用磁盘内容以确保反映外部修改
                 content = diskContent
+                contentCache[url] = diskContent
+                isFileModifiedExternally = false
             }
             // 更新脏状态
             isDirty = (content != diskContent)
             // 加载真实文件时重置 isUntitled
             isUntitled = false
             outlineItems = OutlineService.parse(content)
+            // 递增版本号，通知视图层刷新
+            contentVersion += 1
             // 恢复目标文件的显示模式
             // 非 Markdown 的 .txt 文件强制使用纯文本模式
             if forceRawMode {
@@ -390,6 +441,9 @@ final class DocumentViewModel {
         }
         if let snapshot = diskContentSnapshot[url] {
             isDirty = (content != snapshot)
+        } else {
+            // 无快照时视为未修改，防止 isDirty 保持过时的值
+            isDirty = false
         }
     }
 
@@ -513,19 +567,24 @@ final class DocumentViewModel {
                 return
             }
             // 磁盘内容与内存不同，属于外部修改
-            if let snapshot = diskContentSnapshot[url], diskContent != snapshot {
-                if !isDirty {
-                    // 用户未修改过，自动静默刷新
-                    // 先更新快照，再设置 content，防止 didSet 中 markDirtyIfNeeded() 误判
-                    diskContentSnapshot[url] = diskContent
-                    contentCache[url] = diskContent
-                    content = diskContent
-                    outlineItems = OutlineService.parse(diskContent)
-                    isDirty = false
-                } else {
-                    // 用户有修改，显示刷新按钮
-                    isFileModifiedExternally = true
-                }
+            // 简化判断：到达此处必然 diskContent != content（第 510 行已排除相等情况）
+            // 不再使用 diskContent != snapshot 守卫，因为 loadFile() 从缓存恢复内容时
+            // 会将 snapshot 设为当前磁盘内容，导致 snapshot == diskContent 而守卫失效
+            if !isDirty {
+                // 用户未修改过，自动静默刷新
+                // 先更新快照，再设置 content，防止 didSet 中 markDirtyIfNeeded() 误判
+                diskContentSnapshot[url] = diskContent
+                contentCache[url] = diskContent
+                content = diskContent
+                outlineItems = OutlineService.parse(diskContent)
+                isDirty = false
+                // 递增版本号，通知视图层刷新
+                contentVersion += 1
+                // 清空 undo 栈：内容已被外部替换，旧 undo 历史已无意义
+                UndoManagerProvider.shared.undoManager(for: url)?.removeAllActions()
+            } else {
+                // 用户有修改，显示刷新按钮
+                isFileModifiedExternally = true
             }
         } catch {
             // 文件可能已被删除，忽略错误
@@ -541,11 +600,17 @@ final class DocumentViewModel {
 
         do {
             let diskContent = try await fileService.readFile(at: url)
-            content = diskContent
+            // 先更新快照和缓存，再设置 content，防止 didSet 中 markDirtyIfNeeded() 误判
             diskContentSnapshot[url] = diskContent
             contentCache[url] = diskContent
+            content = diskContent
             isDirty = false
             outlineItems = OutlineService.parse(diskContent)
+            // 清空 undo 栈：reload 意味着放弃当前修改回到磁盘状态，旧 undo 历史已无意义
+            UndoManagerProvider.shared.undoManager(for: url)?.removeAllActions()
+            // 递增版本号，强制通知视图层刷新
+            // 即使磁盘内容与当前 content 相同，视图也需要重新渲染
+            contentVersion += 1
         } catch {
             fileError = .unknown(error)
         }

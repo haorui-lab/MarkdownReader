@@ -555,7 +555,8 @@ struct DetailView: View {
                 searchRef: textViewSearchRef,
                 onCursorLineNumberChanged: { lineNumber in
                     documentViewModel.cursorLineNumber = lineNumber
-                }
+                },
+                contentVersion: documentViewModel.contentVersion
             )
             .opacity(documentViewModel.displayMode == .raw ? 1 : 0)
             .allowsHitTesting(documentViewModel.displayMode == .raw)
@@ -582,6 +583,7 @@ struct DetailView: View {
                     searchWholeWord: findReplaceViewModel.isWholeWord,
                     searchCurrentIndex: findReplaceViewModel.currentMatchIndex,
                     isFindBarVisible: appViewModel.isFindBarVisible,
+                    contentVersion: documentViewModel.contentVersion,
                     onVisibleHeadingChanged: { heading in
                         activeOutlineLineNumber = heading?.lineNumber
                     },

@@ -488,7 +488,15 @@ private struct FileOpenModifier: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .openFile)) { notification in
                 guard let url = notification.object as? URL else { return }
                 // 幂等保护：如果已经在显示此文件，跳过（防止 application(_:open:) 和 .onOpenURL 同时触发导致重复打开）
-                if documentViewModel.currentFileURL == url { return }
+                // 但如果文件被外部修改，触发带确认的 reload 流程（避免有未保存编辑时直接丢弃）
+                if documentViewModel.currentFileURL == url {
+                    if documentViewModel.isFileModifiedExternally {
+                        // 不直接调用 reloadFromDisk()，而是发送 reloadFile 通知
+                        // 让 DetailView 的 handleReloadButtonTapped() 处理（含脏文件确认弹窗）
+                        NotificationCenter.default.post(name: .reloadFile, object: nil)
+                    }
+                    return
+                }
                 if documentViewModel.isUntitled && documentViewModel.isDirty {
                     handleUnsavedChangesBeforeAction { proceed in
                         guard proceed else { return }

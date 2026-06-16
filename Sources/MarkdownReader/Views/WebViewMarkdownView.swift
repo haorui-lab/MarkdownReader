@@ -80,6 +80,9 @@ struct WebViewMarkdownView: View {
     var searchWholeWord: Bool = false
     var searchCurrentIndex: Int = -1
     var isFindBarVisible: Bool = false
+    /// 内容版本号，变化时强制完全重新加载（而非增量更新）
+    /// 用于 reload 操作等场景，即使 content 值未变也需刷新视图
+    var contentVersion: Int = 0
     var onVisibleHeadingChanged: ((MarkdownHTMLService.HeadingInfo?) -> Void)?
     var onVisibleLineChanged: ((Int) -> Void)?
 
@@ -93,6 +96,8 @@ struct WebViewMarkdownView: View {
     @State private var currentHeadings: [MarkdownHTMLService.HeadingInfo] = []
     @State private var pendingScrollToLine: Int?
     @State private var zoomLevel: CGFloat = 1.0
+    /// 上次处理的 contentVersion，用于检测程序化内容更新（reload/load）
+    @State private var lastHandledContentVersion: Int = 0
 
     var body: some View {
         WebView(page)
@@ -111,13 +116,21 @@ struct WebViewMarkdownView: View {
                 exportedPage = page
                 configureAndLoad()
             }
-            .onChange(of: content) { _, _ in
-                if content == lastLoadedContent { return }
+            .onChange(of: content) { _, newContent in
+                if newContent == lastLoadedContent { return }
                 if lastLoadedContent.isEmpty {
                     loadContent()
                 } else {
-                    updateContent(content)
-                    lastLoadedContent = content
+                    updateContent(newContent)
+                    lastLoadedContent = newContent
+                }
+            }
+            .onChange(of: contentVersion) { _, newVersion in
+                // contentVersion 变化意味着 ViewModel 程序化更新了内容（如 reload）
+                // 即使 content 值与 lastLoadedContent 相同，也需要完全重新加载
+                if newVersion != lastHandledContentVersion {
+                    lastHandledContentVersion = newVersion
+                    loadContent()
                 }
             }
             .onChange(of: fileURL) { _, _ in
