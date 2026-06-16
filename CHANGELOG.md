@@ -5,6 +5,23 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.1.7] - 2026-06-16
+
+### 新增
+
+- **关闭窗口菜单项**：添加「关闭窗口」菜单项，快捷键 Cmd+W，支持简中/繁中/英文三语本地化
+
+### 修复
+
+- **外部修改与 reload 内容同步**：修复外部修改与 reload 场景下内容不同步的问题
+  - 新增 contentVersion 版本号机制，在 loadFile/reloadFromDisk/外部静默刷新时递增，解决 @Observable 因内容相同跳过更新及 NSTextView firstResponder 回写覆盖程序化更新的问题
+  - 重构 loadFile() 缓存恢复逻辑：区分「用户有未保存编辑+磁盘外部修改」冲突场景，保留用户编辑内容并标记 isFileModifiedExternally，避免静默丢弃用户修改
+  - loadFile() 同文件外部修改时：若 isDirty 则保留编辑等待 reload 按钮；若非 isDirty 则静默 reloadFromDisk
+  - reloadFromDisk() 中清空 undo 栈（外部替换/reload 后旧历史无意义），并更新 snapshot/cache 后再设置 content（防止 didSet 误判脏状态）
+  - 外部文件监控简化判断：移除 diskContent != snapshot 守卫，因 loadFile() 恢复缓存会将 snapshot 设为当前磁盘内容导致守卫失效
+  - SyntaxHighlightedEditor：contentVersion 变化时跳过 firstResponder 回写保护，强制用 ViewModel 内容覆盖编辑器
+  - WebViewMarkdownView：监听 contentVersion 变化，即使 content 值未变也执行完全重新加载
+
 ## [2.1.6] - 2026-06-15
 
 ### 修复
