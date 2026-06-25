@@ -123,7 +123,8 @@ fi
 if gh release view "$TAG" &>/dev/null; then
     echo "📝 Release $TAG 已存在，上传产物并更新 notes..."
     gh release upload "$TAG" "$DMG_NAME" "$ZIP_NAME" --clobber
-    gh release edit "$TAG" --notes-file /tmp/release-body.md
+    # --draft=false 确保已存在的草稿 release 在更新后被发布
+    gh release edit "$TAG" --draft=false --notes-file /tmp/release-body.md
 else
     gh release create "$TAG" \
         --title "$TAG" \
