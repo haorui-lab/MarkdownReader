@@ -58,6 +58,7 @@ struct ContentView: View {
             .modifier(ToggleSettingsModifier(appViewModel: appViewModel))
             .background(TrafficLightHider(bgColor: themeColors.bgSubtle))
             .background(WindowCloseGuard(documentViewModel: documentViewModel, settings: settings))
+            .background(KeyWindowTracker(documentViewModel: documentViewModel))
             .task {
                 // 连接 FileTreeViewModel 与 DocumentViewModel
                 fileTreeViewModel.documentViewModel = documentViewModel
@@ -458,6 +459,15 @@ private struct KeyboardShortcutModifier: ViewModifier {
 
 // MARK: - 文件打开通知
 
+/// 单窗口判定：仅当存在多个主窗口时，才需要 key 窗口守卫。
+/// 这样在正常的单窗口模式下，保存 / 新建永远不会被静默跳过（无回归风险）；
+/// 仅在 macOS 26 误创隐藏第二窗口时，才限定由 key 窗口处理，避免重复弹框。
+private enum SingleWindow {
+    @MainActor static var hasMultipleMainWindows: Bool {
+        NSApp.windows.filter { !($0 is NSPanel) && $0.styleMask.contains(.resizable) }.count > 1
+    }
+}
+
 private struct FileOpenModifier: ViewModifier {
     let appViewModel: AppViewModel
     let documentViewModel: DocumentViewModel
@@ -521,6 +531,8 @@ private struct FileOpenModifier: ViewModifier {
                 handleLinkedMarkdownFileOpen(url.standardizedFileURL)
             }
             .onReceive(NotificationCenter.default.publisher(for: .newFile)) { _ in
+                // 仅 key 窗口处理（多窗口时），避免隐藏的第二窗口重复创建未保存文件
+                guard documentViewModel.isKeyWindow || !SingleWindow.hasMultipleMainWindows else { return }
                 if documentViewModel.isUntitled && documentViewModel.isDirty {
                     handleUnsavedChangesBeforeAction { proceed in
                         guard proceed else { return }
@@ -541,6 +553,8 @@ private struct FileOpenModifier: ViewModifier {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in
+                // 仅 key 窗口处理（多窗口时），避免隐藏的第二窗口重复弹保存框
+                guard documentViewModel.isKeyWindow || !SingleWindow.hasMultipleMainWindows else { return }
                 // 重入保护：如果正在保存或保存面板已显示，跳过
                 guard !documentViewModel.isSaving && !documentViewModel.isSavePanelShowing else { return }
                 Task {
@@ -548,6 +562,8 @@ private struct FileOpenModifier: ViewModifier {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .saveAsFile)) { _ in
+                // 仅 key 窗口处理（多窗口时），避免隐藏的第二窗口重复弹保存框
+                guard documentViewModel.isKeyWindow || !SingleWindow.hasMultipleMainWindows else { return }
                 // 重入保护：如果保存面板已经在显示，跳过
                 guard !documentViewModel.isSavePanelShowing else { return }
                 documentViewModel.isSavePanelShowing = true
@@ -969,6 +985,53 @@ private struct TrafficLightHider: NSViewRepresentable {
         func updateWindowBackground() {
             guard let window else { return }
             window.backgroundColor = bgColor
+        }
+    }
+}
+
+// MARK: - 主窗口 key 状态追踪
+
+/// 追踪当前 ContentView 所在 NSWindow 是否为 key 窗口，并写入 DocumentViewModel.isKeyWindow。
+///
+/// 修复「无限弹出保存框」根因：macOS 26 WindowGroup 在文件打开事件时可能创建隐藏的第二窗口，
+/// 第二个 ContentView 实例会独立监听 .saveFile / .saveAsFile / .newFile 通知并各自弹框。
+/// 通过本追踪器，仅 key 窗口的 ContentView 处理这些通知，隐藏 / 非前台窗口被静默跳过。
+private struct KeyWindowTracker: NSViewRepresentable {
+    let documentViewModel: DocumentViewModel
+
+    func makeNSView(context: Context) -> NSView {
+        let view = KeyWindowObserverView()
+        view.documentViewModel = documentViewModel
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? KeyWindowObserverView)?.documentViewModel = documentViewModel
+    }
+
+    private final class KeyWindowObserverView: NSView {
+        weak var documentViewModel: DocumentViewModel?
+        private var observers: [NSObjectProtocol] = []
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            for o in observers { NotificationCenter.default.removeObserver(o) }
+            observers.removeAll()
+            guard let window else {
+                documentViewModel?.isKeyWindow = false
+                return
+            }
+            documentViewModel?.isKeyWindow = window.isKeyWindow
+            let center = NotificationCenter.default
+            let became = center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { [weak self] note in
+                guard let self, let noted = note.object as? NSWindow, noted === self.window else { return }
+                Task { @MainActor in self.documentViewModel?.isKeyWindow = true }
+            }
+            let resigned = center.addObserver(forName: NSWindow.didResignKeyNotification, object: nil, queue: .main) { [weak self] note in
+                guard let self, let noted = note.object as? NSWindow, noted === self.window else { return }
+                Task { @MainActor in self.documentViewModel?.isKeyWindow = false }
+            }
+            observers = [became, resigned]
         }
     }
 }

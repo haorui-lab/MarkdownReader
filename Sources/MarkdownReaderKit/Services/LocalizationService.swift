@@ -149,6 +149,7 @@ public enum L10n {
         case titleBarReload
         case titleBarToggleOutline
         case titleBarCopyPath
+        case titleBarPathCopied
 
         // 大纲
         case outlineTitle
@@ -354,6 +355,7 @@ public enum L10n {
         .titleBarReload: "Reload",
         .titleBarToggleOutline: "Toggle Outline",
         .titleBarCopyPath: "Copy Path",
+        .titleBarPathCopied: "Path Copied",
         .fileModifiedExternallyTitle: "File Modified Externally",
         .fileModifiedExternallyMessage: "The file has been modified by another application. Reloading will discard your current changes.",
         .fileModifiedExternallyReload: "Reload",
@@ -540,6 +542,7 @@ public enum L10n {
         .titleBarReload: "重新加载",
         .titleBarToggleOutline: "切换大纲",
         .titleBarCopyPath: "复制路径",
+        .titleBarPathCopied: "路径已复制",
         .fileModifiedExternallyTitle: "文件已被外部修改",
         .fileModifiedExternallyMessage: "文件已被其他应用修改，重新加载将丢弃当前未保存的更改。",
         .fileModifiedExternallyReload: "重新加载",
@@ -726,6 +729,7 @@ public enum L10n {
         .titleBarReload: "重新載入",
         .titleBarToggleOutline: "切換大綱",
         .titleBarCopyPath: "複製路徑",
+        .titleBarPathCopied: "路徑已複製",
         .fileModifiedExternallyTitle: "檔案已被外部修改",
         .fileModifiedExternallyMessage: "檔案已被其他應用修改，重新載入將捨棄目前未儲存的變更。",
         .fileModifiedExternallyReload: "重新載入",

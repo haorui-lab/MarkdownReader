@@ -62,6 +62,11 @@ final class DocumentViewModel {
     /// 是否正在显示保存面板（防止重复弹窗）
     var isSavePanelShowing: Bool = false
 
+    /// 当前 ContentView 所在窗口是否为 key 窗口。
+    /// 仅 key 窗口处理 .saveFile / .saveAsFile / .newFile，避免 macOS 26 多窗口场景下
+    /// 隐藏的第二窗口重复响应通知、重复弹出保存面板。
+    var isKeyWindow: Bool = false
+
     /// 新建文件的临时目录
     static let untitledDirectory: URL = {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("MarkdownReader")

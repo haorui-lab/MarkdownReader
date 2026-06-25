@@ -57,6 +57,9 @@ struct DetailView: View {
     /// PDF 导出失败提示
     @State private var showExportPDFError = false
 
+    /// 路径复制成功提示
+    @State private var showPathCopied = false
+
     /// 导出用的 WebPage 引用
     @State private var exportedPage: WebPage?
 
@@ -187,6 +190,10 @@ struct DetailView: View {
                         let pasteboard = NSPasteboard.general
                         pasteboard.clearContents()
                         pasteboard.setString(path, forType: .string)
+                        showPathCopied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            showPathCopied = false
+                        }
                     } label: {
                         Image(systemName: "doc.on.doc")
                             .font(.system(size: 10))
@@ -286,6 +293,25 @@ struct DetailView: View {
                 Toggle(L10n.tr(.fileModifiedExternallyDontRemind, language: language), isOn: $dontRemindAgain)
             }
         }
+        .overlay(alignment: .top) {
+            if showPathCopied {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 11))
+                    Text(L10n.tr(.titleBarPathCopied, language: language))
+                        .font(.system(size: 12))
+                }
+                .foregroundStyle(themeColors.fgSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(themeColors.surface, in: Capsule())
+                .overlay(Capsule().stroke(themeColors.border, lineWidth: 1))
+                .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
+                .padding(.top, 4)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showPathCopied)
     }
 
     // MARK: - 内容区
