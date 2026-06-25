@@ -82,7 +82,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 不需要手动 synchronize()，UserDefaults 会自动定期同步到磁盘
 
         if didFinishLaunching {
-            // 热启动
+            // 热启动：待打开路径仅用于冷启动 ContentView.task 兜底，热启动下视图已挂载，
+            // 直接通过通知打开即可。此处清除 UserDefaults 残留，避免下次冷启动误打开旧文件。
+            UserDefaults.standard.removeObject(forKey: "pendingOpenFilePath")
+            UserDefaults.standard.removeObject(forKey: "pendingOpenDirectoryPath")
             if hasVisibleWindows() {
                 logger.info("Hot start: has visible window — posting notification")
                 DispatchQueue.main.async {
@@ -92,6 +95,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 // 无可见窗口：SwiftUI 可能创建了不可见窗口
                 logger.info("Hot start: no visible window — activating hidden window + posting notification")
+                // 关键：激活隐藏窗口前，先同步清除其可能残留的旧文档内容。
+                // 关闭窗口时 SwiftUI 仅隐藏而非销毁窗口，DocumentViewModel 仍持有上次打开文件
+                // （如已被删除的 a.md）的内容。若直接激活，会先闪现旧文件内容，再加载新文件。
+                // 先发 .resetToWelcome 同步清空（通知在同一线程同步投递），使窗口激活时
+                // 显示欢迎页而非旧文件内容，随后 .openFile/.openDirectory 加载目标文件。
+                NotificationCenter.default.post(name: .resetToWelcome, object: nil)
                 activateFirstHiddenWindow()
                 // 使用 async 而非 asyncAfter(0.3)，避免不必要的 300ms 延迟
                 // activateFirstHiddenWindow 同步完成窗口激活，下一个 runloop 周期即可安全发通知
@@ -223,6 +232,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
             logger.info("applicationShouldHandleReopen — activating hidden window")
+            // 同 application(_:open:) 热启动分支：激活隐藏窗口前先同步清除残留旧文档内容。
+            // 关闭窗口时 SwiftUI 仅隐藏窗口，AppViewModel 仍可能持有旧文件状态
+            // （isSingleFileMode / rootDirectory），导致 restoreLastLocation() 因守护检查
+            // 提前返回而显示过期/已删除的旧文件内容。先清空再恢复，确保重新加载上次位置。
+            NotificationCenter.default.post(name: .resetToWelcome, object: nil)
             activateFirstHiddenWindow()
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }

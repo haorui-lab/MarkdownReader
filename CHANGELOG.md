@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 修复
+
+- **重新打开上次位置闪现旧文件内容**：修复先打开 a.md、关闭窗口后删除 a.md、再打开 b.md 时，窗口先闪现 a.md 内容再显示 b.md 的问题
+  - 根因：关闭窗口时 SwiftUI 仅隐藏而非销毁窗口，DocumentViewModel 仍持有上次文件内容；热启动（`application(_:open:)` 无可见窗口分支）与 Dock 重新激活（`applicationShouldHandleReopen`）直接激活该隐藏窗口，再异步发送 `.openFile`，导致旧内容在加载新文件前短暂可见
+  - 修复：激活隐藏窗口前先同步发送 `.resetToWelcome` 清空残留文档内容，使窗口激活时显示欢迎页而非旧文件，随后加载目标文件
+  - 顺带修复热启动分支未清除 `pendingOpenFilePath` / `pendingOpenDirectoryPath` UserDefaults 残留，避免下次冷启动误打开旧文件
+
 ## [2.1.7] - 2026-06-16
 
 ### 新增
