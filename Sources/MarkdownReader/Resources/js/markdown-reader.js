@@ -161,10 +161,16 @@
     },
 
     async _encodePlantUML(text) {
+      // Kroki 要求 base64url(zlib deflate, 含 zlib header)。
+      // 注意：plantuml.com 公共服务器（1.2026.7beta6）当前对所有 ~1
+      // deflate-raw 编码请求都错误返回 “This URL does not look like
+      // HUFFMAN data”，故改用 Kroki 作为渲染服务器。
       const encoder = new TextEncoder();
       const data = encoder.encode(text);
 
-      const cs = new CompressionStream('deflate-raw');
+      // CompressionStream('deflate') 产出含 zlib header 的 deflate 流，
+      // 与 Node zlib.deflateSync 一致，正是 Kroki 期望的格式。
+      const cs = new CompressionStream('deflate');
       const writer = cs.writable.getWriter();
       writer.write(data);
       writer.close();
@@ -183,18 +189,13 @@
         offset += chunk.length;
       }
 
-      const map = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_';
-      let result = '';
-      for (let i = 0; i < compressed.length; i += 3) {
-        const b1 = compressed[i];
-        const b2 = i + 1 < compressed.length ? compressed[i + 1] : 0;
-        const b3 = i + 2 < compressed.length ? compressed[i + 2] : 0;
-        result += map[b1 >> 2];
-        result += map[((b1 & 0x3) << 4) | (b2 >> 4)];
-        result += map[((b2 & 0xF) << 2) | (b3 >> 6)];
-        result += map[b3 & 0x3F];
+      // base64url 编码（URL 安全，无填充）
+      let binary = '';
+      for (let i = 0; i < compressed.length; i++) {
+        binary += String.fromCharCode(compressed[i]);
       }
-      return result;
+      const b64 = btoa(binary);
+      return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     },
 
     _showPlantUMLError(container, msg) {
@@ -272,7 +273,8 @@
 
     async _fetchPlantUMLSVG(source, serverUrl) {
       const encoded = await MR._encodePlantUML(source);
-      const svgUrl = `${serverUrl}/svg/~1${encoded}`;
+      // Kroki: /plantuml/svg/<base64url(zlib deflate)>
+      const svgUrl = `${serverUrl}/plantuml/svg/${encoded}`;
       const response = await fetch(svgUrl);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const text = await response.text();
@@ -297,7 +299,7 @@
       const plantumlBlocks = document.querySelectorAll('code.language-plantuml, pre code.language-plantuml, code.language-puml, pre code.language-puml');
       if (plantumlBlocks.length === 0) return;
 
-      const serverUrl = 'https://www.plantuml.com/plantuml';
+      const serverUrl = 'https://kroki.io';
 
       const tasks = Array.from(plantumlBlocks).map(block => {
         const pre = block.parentElement;
@@ -326,7 +328,7 @@
       const containers = document.querySelectorAll('.plantuml-container');
       if (containers.length === 0) return;
 
-      const serverUrl = 'https://www.plantuml.com/plantuml';
+      const serverUrl = 'https://kroki.io';
 
       const tasks = Array.from(containers).map(container => {
         const source = container.dataset.plantumlSource;

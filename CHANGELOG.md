@@ -5,6 +5,17 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+## [2.1.9] - 2026-07-07
+
+### 修复
+
+- **PlantUML 渲染失败**：修复 plantuml.com 公共服务器（1.2026.7beta6）对所有 deflate-raw 编码请求返回 “This URL does not look like HUFFMAN data” 错误的问题
+  - 将渲染服务器从 plantuml.com 切换到 Kroki（kroki.io），兼容 PlantUML 语法且服务端正常
+  - 编码方式从 PlantUML 自定义 base64（deflate-raw）改为标准 base64url（deflate，含 zlib header），匹配 Kroki 要求
+  - 影响 markdown-reader.js 中 _encodePlantUML、_fetchPlantUMLSVG、renderPlantUML、rerenderPlantUML 四处
+
 ## [2.1.8] - 2026-06-25
 
 ### 修复
