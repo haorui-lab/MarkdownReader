@@ -1116,10 +1116,10 @@ private struct WindowCloseGuard: NSViewRepresentable {
                 return false
 
             case .alertSecondButtonReturn:
-                // 不保存，清理临时文件后关闭
-                if let url = doc.currentFileURL {
-                    try? FileManager.default.removeItem(at: url)
-                }
+                // 不保存，彻底放弃临时新建文件（含内存状态）后关闭
+                // 复用 discardUntitledFile()，确保关闭后 isUntitled/isDirty/currentFileURL
+                // 全部清空，避免后续「打开最近使用」误弹未保存提示
+                doc.discardUntitledFile()
                 return true
 
             default:

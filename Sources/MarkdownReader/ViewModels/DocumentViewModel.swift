@@ -523,11 +523,24 @@ final class DocumentViewModel {
         guard isUntitled, let url = currentFileURL else { return }
         stopFileWatcher()
         try? FileManager.default.removeItem(at: url)
+
         contentCache.removeValue(forKey: url)
         diskContentSnapshot.removeValue(forKey: url)
-        isUntitled = false
+        displayModeCache.removeValue(forKey: url)
+
+        // 完整清理当前 Untitled 文档状态，避免窗口关闭后残留
+        // isUntitled == true && isDirty == true，导致后续打开文件误弹未保存提示
+        content = ""
+        currentFileURL = nil
+        fileName = ""
+        fileError = nil
+        isLoading = false
         isDirty = false
+        isUntitled = false
+        isPlainTextMode = false
         isFileModifiedExternally = false
+        displayMode = settings.defaultDisplayMode
+        outlineItems = []
     }
 
     // MARK: - 文件监控与外部变更检测
