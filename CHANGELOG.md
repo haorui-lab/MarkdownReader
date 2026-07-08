@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+## [2.1.10] - 2026-07-08
+
+### 修复
+
+- **窗口关闭后误弹未保存提示**：修复新建（Untitled）文档存在未保存修改时关闭窗口，再次通过「打开最近使用」打开文件会误弹未保存对话框的问题
+  - 根因：`discardUntitledFile()` 仅清理缓存，未重置 `isUntitled` / `isDirty` / `currentFileURL` 等内存状态，导致 `isUntitled == true && isDirty == true` 残留，后续打开文件时被误判为有未保存修改
+  - 修复：`discardUntitledFile()` 扩展为重置全部文档状态（`content` / `currentFileURL` / `fileName` / `displayMode` / `outlineItems` 等），而非仅清缓存
+  - `WindowCloseGuard` 的「不保存」分支复用 `discardUntitledFile()`，统一清理临时文件与内存状态
+
 ## [2.1.9] - 2026-07-07
 
 ### 修复
