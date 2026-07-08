@@ -474,10 +474,29 @@ private struct FileOpenModifier: ViewModifier {
     let fileTreeViewModel: FileTreeViewModel
     let settings: SettingsModel
 
+    /// 确保主窗口可见。
+    /// 关闭窗口时 SwiftUI 仅隐藏而非销毁窗口，ContentView 仍可接收通知。
+    /// 若窗口隐藏时收到 .openFile/.openDirectory（如通过「打开最近使用」菜单），
+    /// 需先激活窗口，否则文件虽加载到 ViewModel 但用户看不到。
+    private func ensureWindowVisible() {
+        let hasVisible = NSApp.windows.contains {
+            $0.isVisible && !($0 is NSPanel) && $0.styleMask.contains(.resizable)
+        }
+        guard !hasVisible else { return }
+        for window in NSApp.windows
+            where !(window is NSPanel) && window.canBecomeKey && window.styleMask.contains(.resizable) {
+            window.setIsVisible(true)
+            window.makeKeyAndOrderFront(nil)
+            break
+        }
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .openDirectory)) { notification in
                 guard let url = notification.object as? URL else { return }
+                ensureWindowVisible()
                 // 幂等保护：如果已经在显示此目录，跳过
                 if appViewModel.rootDirectory == url { return }
                 if documentViewModel.isUntitled && documentViewModel.isDirty {
@@ -497,6 +516,7 @@ private struct FileOpenModifier: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: .openFile)) { notification in
                 guard let url = notification.object as? URL else { return }
+                ensureWindowVisible()
                 // 幂等保护：如果已经在显示此文件，跳过（防止 application(_:open:) 和 .onOpenURL 同时触发导致重复打开）
                 // 但如果文件被外部修改，触发带确认的 reload 流程（避免有未保存编辑时直接丢弃）
                 if documentViewModel.currentFileURL == url {
@@ -515,7 +535,12 @@ private struct FileOpenModifier: ViewModifier {
                         settings.lastOpenedDirectory = nil
                         settings.lastOpenedFile = url
                         settings.addRecentItem(url: url, isDirectory: false)
-                        // 不需要显式调用 loadFile — selectedFileURL 变化会触发 SelectionChangeModifier 统一加载
+                        // 显式触发加载：窗口关闭后 selectedFileURL 可能与旧值相同，
+                        // 仅靠 onChange(of: selectedFileURL) 不一定触发，需直接加载兜底。
+                        // loadFile 内部有幂等判断，不会重复加载。
+                        Task {
+                            await documentViewModel.loadFile(at: url)
+                        }
                     }
                 } else {
                     appViewModel.openSingleFile(url)
@@ -523,7 +548,10 @@ private struct FileOpenModifier: ViewModifier {
                     settings.lastOpenedDirectory = nil
                     settings.lastOpenedFile = url
                     settings.addRecentItem(url: url, isDirectory: false)
-                    // 不需要显式调用 loadFile — selectedFileURL 变化会触发 SelectionChangeModifier 统一加载
+                    // 显式触发加载：同上，避免依赖 onChange 兜底。
+                    Task {
+                        await documentViewModel.loadFile(at: url)
+                    }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .openLinkedMarkdownFile)) { notification in
