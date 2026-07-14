@@ -200,10 +200,19 @@ final class FileTreeViewModel {
         expandedDirs.contains(url)
     }
 
-    /// 选中文件（包括非 .md 文件，以触发错误提示）
+    /// 选中文件（包括非 .md 文件，以触发错误提示）。
+    /// Task 9：经 session.requestFileSelection 路由，所有权冲突时不改选中项。
+    /// 通过 `onSelectFile` 回调交由持有 session 的视图层执行路由，避免 VM 反向依赖 Coordinator。
+    var onSelectFileViaSession: ((URL) -> Void)?
+
     func selectFile(_ node: FileNode) {
         if node.isDirectory { return }
-        selectedFileURL = node.path
+        // 优先经 session 路由（多窗口）；无 session 回调时回退直接赋值（兼容测试/单窗口）。
+        if let route = onSelectFileViaSession {
+            route(node.path)
+        } else {
+            selectedFileURL = node.path
+        }
     }
 
     /// 获取扁平化的可见节点列表（用于键盘导航）

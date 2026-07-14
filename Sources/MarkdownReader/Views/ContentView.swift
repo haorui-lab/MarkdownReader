@@ -153,7 +153,8 @@ struct ContentView: View {
                 SidebarView(
                     fileTreeViewModel: fileTreeViewModel,
                     appViewModel: appViewModel,
-                    documentViewModel: documentViewModel
+                    documentViewModel: documentViewModel,
+                    session: session
                 )
                 .frame(width: appViewModel.isSidebarVisible ? appViewModel.sidebarWidth : 0)
                 .clipped()

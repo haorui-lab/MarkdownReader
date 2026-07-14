@@ -384,7 +384,10 @@ final class CommandPaletteViewModel {
             let resolvedURL = url.resolvingSymlinksInPath()
             let resolvedRootDir = rootDir.resolvingSymlinksInPath()
             if resolvedURL.path.hasPrefix(resolvedRootDir.path + "/") {
-                fileTreeVM.selectedFileURL = url
+                // Task 9：目录内文件经 session 路由选择（所有权冲突时激活 owner）。
+                fileTreeVM.onSelectFileViaSession?(url) ?? {
+                    fileTreeVM.selectedFileURL = url
+                }()
                 return
             }
         }

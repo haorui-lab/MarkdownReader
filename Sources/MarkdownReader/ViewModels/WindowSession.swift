@@ -93,6 +93,11 @@ final class WindowSession {
 
         // commandTarget 弱引用本 session（init 后回填，避免 self 未完成初始化）
         self.commandTarget.session = self
+
+        // Task 9：目录树选择经本 session 路由（所有权冲突时激活 owner，不改本窗口选中项）。
+        self.fileTreeViewModel.onSelectFileViaSession = { [weak self] url in
+            self?.requestFileSelection(url)
+        }
     }
 
    // MARK: - 资源打开

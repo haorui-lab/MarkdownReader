@@ -6,6 +6,8 @@ struct SidebarView: View {
     let fileTreeViewModel: FileTreeViewModel
     let appViewModel: AppViewModel
     let documentViewModel: DocumentViewModel
+    /// Task 9：用于跨窗口所有权标记（文件行「已在另一窗口打开」）。
+    let session: WindowSession
     @Environment(\.language) private var language
     @Environment(\.themeColors) private var themeColors
 
@@ -87,6 +89,7 @@ struct SidebarView: View {
         List {
             if let url = appViewModel.singleFileURL {
                 Button {
+                    // Task 9：单文件模式下文件即本窗口资源，直接选择。
                     fileTreeViewModel.selectedFileURL = url
                 } label: {
                     HStack(spacing: 8) {
@@ -123,7 +126,7 @@ struct SidebarView: View {
     private var directoryTreeView: some View {
         List {
             ForEach(fileTreeViewModel.nodes) { node in
-                FileNodeRow(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
+                FileNodeRow(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel, session: session)
             }
         }
         .listStyle(.sidebar)
@@ -213,6 +216,8 @@ struct FileNodeRow: View {
     let node: FileNode
     let fileTreeViewModel: FileTreeViewModel
     let documentViewModel: DocumentViewModel
+    /// Task 9：用于跨窗口所有权标记。目录行不使用，但文件行需要。
+    let session: WindowSession
     @Environment(\.themeColors) private var themeColors
     @Environment(\.language) private var language
 
@@ -245,10 +250,10 @@ struct FileNodeRow: View {
                 )
             ) {
                 ForEach(children) { child in
-                    FileNodeRow(node: child, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
+                    FileNodeRow(node: child, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel, session: session)
                 }
             } label: {
-                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
+                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel, session: session)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         // 点击目录标签区域切换展开/折叠
@@ -262,7 +267,7 @@ struct FileNodeRow: View {
             Button {
                 fileTreeViewModel.selectFile(node)
             } label: {
-                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
+                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel, session: session)
             }
             .buttonStyle(.plain)
             .contentShape(Rectangle())

@@ -78,6 +78,18 @@ final class WindowCoordinator {
         return resourceOwners[identity]
     }
 
+    /// 文件 URL 是否由「本 windowID 之外」的窗口持有（Task 9 目录树标记）。
+    /// 不可识别身份（目录等）始终返回 false。
+    func isFileOwnedByAnotherWindow(_ url: URL, besides windowID: WindowID) -> Bool {
+        guard let identity = try? identityService.identity(for: url, kind: .file) else {
+            return false
+        }
+        if let owner = resourceOwners[identity], owner != windowID {
+            return true
+        }
+        return false
+    }
+
     /// 当前是否存在任何空白会话。
     var hasBlankSession: Bool {
         registeredIDs.contains { id in
