@@ -64,7 +64,7 @@ struct ContentView: View {
             ))
             .modifier(ToggleSettingsModifier())
             .background(TrafficLightHider(bgColor: themeColors.bgSubtle))
-            .background(WindowCloseGuard(documentViewModel: documentViewModel, settings: settings))
+            .background(WindowCloseGuard(session: session))
             .background(KeyWindowTracker(documentViewModel: documentViewModel))
             .task {
                 // ViewModel 间依赖连接已由 WindowSession.init 完成，不在此重复连接。
@@ -985,30 +985,24 @@ private struct KeyWindowTracker: NSViewRepresentable {
     }
 }
 
-// MARK: - 窗口关闭保护（未保存更改提醒）
+// MARK: - 窗口关闭保护（Task 12：委托 TerminationCoordinator）
 
-/// 通过 NSViewRepresentable 设置窗口代理，在关闭前检查未保存更改
-/// 使用 performClose 触发 windowShouldClose，展示保存/不保存/取消对话框
+/// 通过 NSViewRepresentable 设置窗口代理，关闭前委托 TerminationCoordinator 询问所属 session。
 private struct WindowCloseGuard: NSViewRepresentable {
-    let documentViewModel: DocumentViewModel
-    let settings: SettingsModel
+    let session: WindowSession
 
     func makeNSView(context: Context) -> NSView {
         let view = WindowCloseGuardView()
-        view.documentViewModel = documentViewModel
-        view.settings = settings
+        view.session = session
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        (nsView as? WindowCloseGuardView)?.documentViewModel = documentViewModel
-        (nsView as? WindowCloseGuardView)?.settings = settings
+        (nsView as? WindowCloseGuardView)?.session = session
     }
 
-    /// 持有窗口代理的 NSView，在 viewDidMoveToWindow 中设置代理
     private final class WindowCloseGuardView: NSView, NSWindowDelegate {
-        weak var documentViewModel: DocumentViewModel?
-        weak var settings: SettingsModel?
+        weak var session: WindowSession?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -1016,66 +1010,70 @@ private struct WindowCloseGuard: NSViewRepresentable {
         }
 
         func windowShouldClose(_ sender: NSWindow) -> Bool {
-            guard let doc = documentViewModel else { return true }
-
-            // 仅对临时新建文件且有未保存更改时弹窗提醒
-            // 普通脏文件（已保存在磁盘）允许自由关闭，不弹窗
-            if !(doc.isUntitled && doc.isDirty) { return true }
-
-            let language = settings?.languagePref.resolvedLanguage ?? .en
-
-            // 显示未保存更改提醒
-            let alert = NSAlert()
-            alert.messageText = L10n.tr(.unsavedChangesTitle, language: language)
-            alert.informativeText = L10n.tr(.unsavedChangesMessage, language: language)
-            alert.alertStyle = .warning
-
-            alert.addButton(withTitle: L10n.tr(.unsavedSave, language: language))
-            alert.addButton(withTitle: L10n.tr(.unsavedDontSave, language: language))
-            alert.addButton(withTitle: L10n.tr(.unsavedCancel, language: language))
-
-            // 设置「保存」为默认按钮（回车键）
-            alert.buttons[0].keyEquivalent = "\r"
-            // 设置「不保存」为 Cmd+D 快捷键
-            alert.buttons[1].keyEquivalent = "d"
-            alert.buttons[1].keyEquivalentModifierMask = .command
-            // 设置「取消」为 Esc 键
-            alert.buttons[2].keyEquivalent = "\u{1b}"
-
-            let response = alert.runModal()
-
-            switch response {
-            case .alertFirstButtonReturn:
-                // 保存：临时新建文件走另存为流程
-                let defaultDir = settings?.lastOpenedDirectory ?? settings?.lastOpenedFile?.deletingLastPathComponent()
-                let suggestedName = doc.fileName.isEmpty ? "Untitled.md" : doc.fileName
-
-                if let saveURL = OpenPanelHelper.showSavePanel(
-                for: nil,
-                    language: language,
-                    defaultDirectory: defaultDir,
-                    suggestedName: suggestedName
-                ) {
-                    Task {
-                        await doc.saveAs(to: saveURL)
-                        // 保存成功后关闭窗口
-                        sender.close()
-                    }
-                }
-                // 用户取消了另存为，不关闭窗口
-                return false
-
-            case .alertSecondButtonReturn:
-                // 不保存，彻底放弃临时新建文件（含内存状态）后关闭
-                // 复用 discardUntitledFile()，确保关闭后 isUntitled/isDirty/currentFileURL
-                // 全部清空，避免后续「打开最近使用」误弹未保存提示
-                doc.discardUntitledFile()
+            guard let session else { return true }
+            // Task 12：委托 TerminationCoordinator 的 shouldClose 逻辑
+            // TerminationCoordinator 从 AppDelegate 获取，这里通过 session.coordinator 间接访问
+            let decision = session.prepareForClose()
+            switch decision {
+            case .close:
                 return true
-
-            default:
-                // 取消，不关闭窗口
+            case .needsUntitledDecision:
+                // 弹窗逻辑在 ApplicationTerminationCoordinator.presentUntitledSaveAlert
+                // 但 headless 测试无法弹 alert，这里直接用内联逻辑
+                return WindowCloseGuard.presentUntitledSaveAlert(for: session)
+            case .cancel:
                 return false
             }
+        }
+    }
+
+    /// 弹出未保存 Untitled 的保存/不保存/取消对话框。
+    @MainActor
+    private static func presentUntitledSaveAlert(for session: WindowSession) -> Bool {
+        let doc = session.documentViewModel
+        let settings = SettingsModel.shared
+        let language = settings.languagePref.resolvedLanguage
+
+        let alert = NSAlert()
+        alert.messageText = L10n.tr(.unsavedChangesTitle, language: language)
+        alert.informativeText = L10n.tr(.unsavedChangesMessage, language: language)
+        alert.alertStyle = .warning
+
+        alert.addButton(withTitle: L10n.tr(.unsavedSave, language: language))
+        alert.addButton(withTitle: L10n.tr(.unsavedDontSave, language: language))
+        alert.addButton(withTitle: L10n.tr(.unsavedCancel, language: language))
+
+        alert.buttons[0].keyEquivalent = "\r"
+        alert.buttons[1].keyEquivalent = "d"
+        alert.buttons[1].keyEquivalentModifierMask = .command
+        alert.buttons[2].keyEquivalent = "\u{1b}"
+
+        let response = alert.runModal()
+
+        switch response {
+        case .alertFirstButtonReturn:
+            let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
+            let suggestedName = doc.fileName.isEmpty ? "Untitled.md" : doc.fileName
+            guard let saveURL = OpenPanelHelper.showSavePanel(
+                for: session.window,
+                language: language,
+                defaultDirectory: defaultDir,
+                suggestedName: suggestedName
+            ) else {
+                return false
+            }
+            let semaphore = DispatchSemaphore(value: 0)
+            Task { @MainActor in
+                await doc.saveAs(to: saveURL)
+                semaphore.signal()
+            }
+            semaphore.wait()
+            return true
+        case .alertSecondButtonReturn:
+            doc.discardUntitledFile()
+            return true
+        default:
+            return false
         }
     }
 }

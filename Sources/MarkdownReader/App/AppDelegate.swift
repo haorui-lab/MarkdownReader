@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 应用是否已经完成启动
     private var didFinishLaunching = false
 
+    /// 应用级终止协调器（Task 12）
+    let terminationCoordinator = ApplicationTerminationCoordinator()
+
     /// 应用即将完成启动
     func applicationWillFinishLaunching(_ notification: Notification) {
         logger.info("applicationWillFinishLaunching")
@@ -72,19 +75,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
             logger.info("applicationShouldHandleReopen — no visible windows")
-            let coordinator = Self.coordinator
-            if coordinator.hasRegisteredSession {
-                // 有注册但不可见的窗口：激活最后一个
-                if let lastID = coordinator.lastActiveWindowID {
-                    coordinator.activate(windowID: lastID)
-                }
-            } else {
-                // 无任何窗口：创建空白窗口
-                coordinator.openBlankWindow()
-            }
-            // 拖拽 overlay 由 WindowLifecycleBridge 安装（Task 11）
+            terminationCoordinator.handleReopen()
         }
         return false
+    }
+
+    // MARK: - 应用退出
+
+    /// Task 12：返回 .terminateLater，由 TerminationCoordinator 串行处理脏 Untitled session。
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        terminationCoordinator.coordinator = Self.coordinator
+        DispatchQueue.main.async { [weak self] in
+            self?.terminationCoordinator.processTermination()
+        }
+        return .terminateLater
     }
 
     // MARK: - Coordinator 访问
@@ -96,6 +100,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private static let _sharedCoordinator = WindowCoordinator()
+
+    override init() {
+        super.init()
+        terminationCoordinator.coordinator = Self._sharedCoordinator
+    }
 
     /// 将打开请求入队到 Coordinator。
     /// 冷启动（didFinishLaunching == false）时仅入队，等 applicationDidFinishLaunching drain。
