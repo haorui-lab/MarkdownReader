@@ -12,16 +12,20 @@ import Foundation
 ///
 /// 该服务本身无状态，安全跨线程使用（遵守 `Sendable`）。卷大小写敏感查询直接
 /// 读取 `URLResourceValues`，不维护可变缓存，避免 Swift 6 并发隔离问题。
-final class ResourceIdentityService: Sendable {
+struct ResourceIdentityService: Sendable {
 
     init() {}
 
     /// 为给定 URL 与类型生成规范化身份。
     /// - Parameters:
-    ///   - url: 资源 URL（file URL）。
+    ///   - url: 资源 URL（必须是 file URL，见设计文档 §6.2）。
     ///   - kind: 资源类型（文件或目录）。类型不可互换。
     /// - Returns: 规范化后的 `ResourceIdentity`。
-    func identity(for url: URL, kind: ResourceIdentity.Kind) -> ResourceIdentity {
+    /// - Throws: 非 file URL 抛 `OpenRoutingError.unsupportedType`。
+    func identity(for url: URL, kind: ResourceIdentity.Kind) throws -> ResourceIdentity {
+        guard url.isFileURL else {
+            throw OpenRoutingError.unsupportedType(url)
+        }
         let standardized = url.standardizedFileURL
         let resolved: URL
         if FileManager.default.fileExists(atPath: standardized.path) {

@@ -65,8 +65,8 @@ final class WindowCoordinator {
 
     func owner(of identity: ResourceIdentity) -> WindowID? { resourceOwners[identity] }
 
-    func ownerWindowID(ofFile url: URL) -> WindowID? {
-        let identity = identityService.identity(for: url, kind: .file)
+    func ownerWindowID(ofFile url: URL) throws -> WindowID? {
+        let identity = try identityService.identity(for: url, kind: .file)
         return resourceOwners[identity]
     }
 
@@ -157,13 +157,13 @@ final class WindowCoordinator {
     /// - 旧所有权必须属于本窗口。
     /// - 任一步失败不得修改原状态。
     func migrateOwnership(from oldURL: URL, to newURL: URL, for windowID: WindowID) throws {
-        let oldIdentity = identityService.identity(for: oldURL, kind: .file)
-        let newIdentity = identityService.identity(for: newURL, kind: .file)
+        let oldIdentity = try identityService.identity(for: oldURL, kind: .file)
+        let newIdentity = try identityService.identity(for: newURL, kind: .file)
 
         // 旧 URL 必须由本窗口持有
         guard resourceOwners[oldIdentity] == windowID else {
-            // 旧所有权不属于本窗口：无操作（保存到新位置但不迁移不冲突）
-            // 仍需检查新目标是否被他人占用
+            // 旧 URL 不属本窗口（如 Untitled 首次 Save As 时旧 URL 从未注册）：
+            // 不迁移，但需为本窗口声明新 URL 所有权。仍要先检查新目标是否被他人占用。
             if let other = resourceOwners[newIdentity], other != windowID {
                 throw OpenRoutingError.ownershipMigrationConflict(newURL, owner: other)
             }
@@ -199,7 +199,12 @@ final class WindowCoordinator {
 
     /// 目录树/命令面板点击文件前的路由判断。
     func routeFileSelection(_ url: URL, from windowID: WindowID) -> RouteDecision {
-        let resource = identityService.identity(for: url, kind: .file)
+        let resource: ResourceIdentity
+        do {
+            resource = try identityService.identity(for: url, kind: .file)
+        } catch {
+            return .reject(.unsupportedType(url))
+        }
         let state = routingSnapshot()
         return routingEngine.decision(
             for: resource,

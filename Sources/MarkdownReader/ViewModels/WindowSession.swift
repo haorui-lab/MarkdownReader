@@ -21,6 +21,9 @@ final class WindowSession {
     let documentViewModel: DocumentViewModel
     let commandPaletteViewModel: CommandPaletteViewModel
 
+    /// 注入的资源身份服务，避免每次调用时新建实例。
+    private let identityService: ResourceIdentityService
+
     weak var coordinator: WindowCoordinator?
     weak var window: NSWindow?
 
@@ -36,6 +39,7 @@ final class WindowSession {
     init(
         id: WindowID,
         settings: SettingsModel = .shared,
+        identityService: ResourceIdentityService = ResourceIdentityService(),
         coordinator: WindowCoordinator? = nil
     ) {
         self.id = id
@@ -43,6 +47,7 @@ final class WindowSession {
         self.fileTreeViewModel = FileTreeViewModel(settings: settings)
         self.documentViewModel = DocumentViewModel(settings: settings)
         self.commandPaletteViewModel = CommandPaletteViewModel()
+        self.identityService = identityService
         self.coordinator = coordinator
 
         // 连接 ViewModel 间依赖（原 ContentView.task 中的逻辑）
@@ -58,21 +63,20 @@ final class WindowSession {
     // MARK: - 资源打开
 
     /// 在本会话内打开文件资源。
+    ///
     /// 调用方需已通过 Coordinator 路由确认本会话是合法 owner。
+    /// 所有权声明（claim）由路由成功后的调用点统一负责，不在本方法内重复 claim——
+    /// 避免与路由引擎形成双保险且用 `try?` 吞掉冲突（历史 bug）。
     func openFile(_ url: URL) async {
-        let identity = ResourceIdentityService().identity(for: url, kind: .file)
-        try? coordinator?.claim(identity, for: id)
-
         appViewModel.openSingleFile(url)
         fileTreeViewModel.selectedFileURL = url
         await documentViewModel.loadFile(at: url)
     }
 
     /// 在本会话内以目录模式打开。
+    ///
+    /// 同 `openFile`，所有权声明由调用点负责。
     func openDirectory(_ url: URL) async {
-        let identity = ResourceIdentityService().identity(for: url, kind: .directory)
-        try? coordinator?.claim(identity, for: id)
-
         appViewModel.openDirectory(url)
         await fileTreeViewModel.loadDirectory(url)
     }

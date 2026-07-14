@@ -9,12 +9,12 @@ final class WindowRoutingEngineTests: TemporaryDirectoryTestCase {
 
     private func file(_ name: String, content: String = "x") -> ResourceIdentity {
         let url = (try? makeFile(named: name, content: content)) ?? temporaryDirectory!.appendingPathComponent(name)
-        return identityService.identity(for: url, kind: .file)
+        return try! identityService.identity(for: url, kind: .file)
     }
 
     private func directory(_ name: String) -> ResourceIdentity {
         let url = (try? makeDirectory(named: name)) ?? temporaryDirectory!.appendingPathComponent(name)
-        return identityService.identity(for: url, kind: .directory)
+        return try! identityService.identity(for: url, kind: .directory)
     }
 
     // MARK: - 空白窗口复用

@@ -16,7 +16,7 @@ final class WindowCoordinatorTests: TemporaryDirectoryTestCase {
 
     private func file(_ name: String) -> ResourceIdentity {
         let url = (try? makeFile(named: name, content: "x")) ?? temporaryDirectory!.appendingPathComponent(name)
-        return identityService.identity(for: url, kind: .file)
+        return try! identityService.identity(for: url, kind: .file)
     }
 
     private func fileURL(_ name: String) -> URL {
@@ -82,8 +82,8 @@ final class WindowCoordinatorTests: TemporaryDirectoryTestCase {
 
         let oldURL = fileURL("old.md")
         let newURL = fileURL("new.md")
-        let oldID = identityService.identity(for: oldURL, kind: .file)
-        let newID = identityService.identity(for: newURL, kind: .file)
+        let oldID = try identityService.identity(for: oldURL, kind: .file)
+        let newID = try identityService.identity(for: newURL, kind: .file)
 
         try coordinator.claim(oldID, for: a)
         try coordinator.migrateOwnership(from: oldURL, to: newURL, for: a)
@@ -101,8 +101,8 @@ final class WindowCoordinatorTests: TemporaryDirectoryTestCase {
 
         let sourceURL = fileURL("source.md")
         let occupiedURL = fileURL("occupied.md")
-        let sourceID = identityService.identity(for: sourceURL, kind: .file)
-        let occupiedID = identityService.identity(for: occupiedURL, kind: .file)
+        let sourceID = try identityService.identity(for: sourceURL, kind: .file)
+        let occupiedID = try identityService.identity(for: occupiedURL, kind: .file)
 
         try coordinator.claim(sourceID, for: a)
         try coordinator.claim(occupiedID, for: b)
@@ -138,7 +138,7 @@ final class WindowCoordinatorTests: TemporaryDirectoryTestCase {
         coordinator.registerSession(id: other, isBlank: true)
 
         let url = fileURL("owned.md")
-        let identity = identityService.identity(for: url, kind: .file)
+        let identity = try identityService.identity(for: url, kind: .file)
         try coordinator.claim(identity, for: owner)
 
         let decision = coordinator.routeFileSelection(url, from: other)

@@ -25,8 +25,8 @@ final class ResourceIdentityServiceTests: TemporaryDirectoryTestCase {
 
         // 通过 .. 引用同一文件
         let dotDotPath = parent!.appendingPathComponent("proj/../proj/a.md")
-        let direct = service.identity(for: file, kind: .file)
-        let viaDotDot = service.identity(for: dotDotPath, kind: .file)
+        let direct = try service.identity(for: file, kind: .file)
+        let viaDotDot = try service.identity(for: dotDotPath, kind: .file)
 
         XCTAssertEqual(direct, viaDotDot)
         XCTAssertEqual(direct.canonicalURL.path, file.standardizedFileURL.path)
@@ -40,8 +40,8 @@ final class ResourceIdentityServiceTests: TemporaryDirectoryTestCase {
         let link = temporaryDirectory.appendingPathComponent("link.md")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: realFile)
 
-        let direct = service.identity(for: realFile, kind: .file)
-        let linked = service.identity(for: link, kind: .file)
+        let direct = try service.identity(for: realFile, kind: .file)
+        let linked = try service.identity(for: link, kind: .file)
         XCTAssertEqual(direct, linked)
     }
 
@@ -49,8 +49,8 @@ final class ResourceIdentityServiceTests: TemporaryDirectoryTestCase {
 
     func testFileAndDirectoryAtSamePathUseDifferentKinds() throws {
         let dir = try makeDirectory(named: "notes")
-        let fileDir = service.identity(for: dir, kind: .directory)
-        let fileFile = service.identity(for: dir, kind: .file)
+        let fileDir = try service.identity(for: dir, kind: .directory)
+        let fileFile = try service.identity(for: dir, kind: .file)
         XCTAssertNotEqual(fileDir, fileFile)
     }
 
@@ -60,8 +60,8 @@ final class ResourceIdentityServiceTests: TemporaryDirectoryTestCase {
         let missing1 = temporaryDirectory.appendingPathComponent("ghost.md")
         let missing2 = temporaryDirectory.appendingPathComponent("ghost.md")
 
-        let id1 = service.identity(for: missing1, kind: .file)
-        let id2 = service.identity(for: missing2, kind: .file)
+        let id1 = try service.identity(for: missing1, kind: .file)
+        let id2 = try service.identity(for: missing2, kind: .file)
         XCTAssertEqual(id1, id2)
     }
 
@@ -71,8 +71,8 @@ final class ResourceIdentityServiceTests: TemporaryDirectoryTestCase {
         let existing = try makeFile(named: "present.md", content: "hi")
         let missing = temporaryDirectory!.appendingPathComponent("absent.md")
 
-        let existingId = service.identity(for: existing, kind: .file)
-        let missingId = service.identity(for: missing, kind: .file)
+        let existingId = try service.identity(for: existing, kind: .file)
+        let missingId = try service.identity(for: missing, kind: .file)
         // 不存在的路径与存在路径 comparisonKey 应不同，避免误判所有权
         XCTAssertNotEqual(existingId, missingId)
     }
@@ -82,7 +82,7 @@ final class ResourceIdentityServiceTests: TemporaryDirectoryTestCase {
     func testDifferentFilesProduceDifferentIdentities() throws {
         let a = try makeFile(named: "a.md", content: "a")
         let b = try makeFile(named: "b.md", content: "b")
-        XCTAssertNotEqual(service.identity(for: a, kind: .file),
-                          service.identity(for: b, kind: .file))
+        XCTAssertNotEqual(try service.identity(for: a, kind: .file),
+                          try service.identity(for: b, kind: .file))
     }
 }
