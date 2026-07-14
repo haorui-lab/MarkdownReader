@@ -44,7 +44,8 @@ struct ContentView: View {
                 appViewModel: appViewModel,
                 documentViewModel: documentViewModel,
                 fileTreeViewModel: fileTreeViewModel,
-                settings: settings
+                settings: settings,
+                session: session
             ))
             .modifier(DirectoryChangeModifier(
                 appViewModel: appViewModel,
@@ -80,8 +81,7 @@ struct ContentView: View {
                     // 幂等保护：如果 AppDelegate 已通过通知打开，FileOpenModifier 会跳过
                     appViewModel.openSingleFile(url)
                     fileTreeViewModel.selectedFileURL = url
-                    settings.lastOpenedDirectory = nil
-                    settings.lastOpenedFile = url
+                    session.recordLastOpened(file: url, directory: nil)
                     settings.addRecentItem(url: url, isDirectory: false)
                     await documentViewModel.loadFile(at: url)
                 } else if let dirPath = UserDefaults.standard.string(forKey: "pendingOpenDirectoryPath") {
@@ -89,8 +89,7 @@ struct ContentView: View {
                     UserDefaults.standard.removeObject(forKey: "pendingOpenFilePath")
                     let url = URL(fileURLWithPath: dirPath)
                     appViewModel.openDirectory(url)
-                    settings.lastOpenedDirectory = url
-                    settings.lastOpenedFile = nil
+                    session.recordLastOpened(file: nil, directory: url)
                     settings.addRecentItem(url: url, isDirectory: true)
                     await fileTreeViewModel.loadDirectory(url)
                 }
@@ -464,6 +463,8 @@ private struct FileOpenModifier: ViewModifier {
     let documentViewModel: DocumentViewModel
     let fileTreeViewModel: FileTreeViewModel
     let settings: SettingsModel
+    /// Task 13：用于判断本窗口是否为最后活动窗口，限制 lastOpened 写入。
+    let session: WindowSession
 
     /// 确保主窗口可见。
     /// 关闭窗口时 SwiftUI 仅隐藏而非销毁窗口，ContentView 仍可接收通知。
@@ -494,14 +495,12 @@ private struct FileOpenModifier: ViewModifier {
                     handleUnsavedChangesBeforeAction { proceed in
                         guard proceed else { return }
                         appViewModel.openDirectory(url)
-                        settings.lastOpenedDirectory = url
-                        settings.lastOpenedFile = nil
+                        session.recordLastOpened(file: nil, directory: url)
                         settings.addRecentItem(url: url, isDirectory: true)
                     }
                 } else {
                     appViewModel.openDirectory(url)
-                    settings.lastOpenedDirectory = url
-                    settings.lastOpenedFile = nil
+                    session.recordLastOpened(file: nil, directory: url)
                     settings.addRecentItem(url: url, isDirectory: true)
                 }
             }
@@ -524,8 +523,7 @@ private struct FileOpenModifier: ViewModifier {
                         guard proceed else { return }
                         appViewModel.openSingleFile(url)
                         fileTreeViewModel.selectedFileURL = url
-                        settings.lastOpenedDirectory = nil
-                        settings.lastOpenedFile = url
+                        session.recordLastOpened(file: url, directory: nil)
                         settings.addRecentItem(url: url, isDirectory: false)
                         // 显式触发加载：窗口关闭后 selectedFileURL 可能与旧值相同，
                         // 仅靠 onChange(of: selectedFileURL) 不一定触发，需直接加载兜底。
@@ -537,8 +535,7 @@ private struct FileOpenModifier: ViewModifier {
                 } else {
                     appViewModel.openSingleFile(url)
                     fileTreeViewModel.selectedFileURL = url
-                    settings.lastOpenedDirectory = nil
-                    settings.lastOpenedFile = url
+                    session.recordLastOpened(file: url, directory: nil)
                     settings.addRecentItem(url: url, isDirectory: false)
                     // 显式触发加载：同上，避免依赖 onChange 兜底。
                     Task {
@@ -573,15 +570,14 @@ private struct FileOpenModifier: ViewModifier {
         if let rootDir = appViewModel.rootDirectory,
            isFileURL(url, inside: rootDir) {
             fileTreeViewModel.selectedFileURL = url
-            settings.lastOpenedFile = url
+            session.recordLastOpened(file: url, directory: nil)
             settings.addRecentItem(url: url, isDirectory: false)
             return
         }
 
         appViewModel.openSingleFile(url)
         fileTreeViewModel.selectedFileURL = url
-        settings.lastOpenedDirectory = nil
-        settings.lastOpenedFile = url
+        session.recordLastOpened(file: url, directory: nil)
         settings.addRecentItem(url: url, isDirectory: false)
     }
 

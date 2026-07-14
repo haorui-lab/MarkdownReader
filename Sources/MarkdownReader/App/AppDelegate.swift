@@ -54,16 +54,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 注册窗口拖拽：Task 11 起由 WindowLifecycleBridge 在每窗口挂载时安装
         // 窗口级 WindowDropOverlayView，不再由 AppDelegate 全局安装。
 
-        // 冷启动无 pending 外部文件时恢复上次位置
-        // external 请求已在 application(_:open:) 中入队，Coordinator 会优先处理它们
+        // Task 13：启动优先级由 AppStartupCoordinator 统一裁决。
+        // 设置 hasPendingExternalRequests，供 shouldRestoreLastLocation 判断。
         let coordinator = Self.coordinator
+        AppStartupCoordinator.shared.hasPendingExternalRequests = coordinator.pendingRequestCount > 0
         if coordinator.pendingRequestCount == 0 {
-            if SettingsModel.shared.reopenLastLocation {
+            // 无外部请求：恢复上次位置（若开启）
+            if AppStartupCoordinator.shared.shouldRestoreLastLocation() {
                 logger.info("Cold start: restoring last location")
                 NotificationCenter.default.post(name: .restoreLastLocation, object: nil)
             }
         } else {
-            // 有 pending 请求：drain，external 优先
+            // 有 pending 请求：drain，external 优先（不恢复上次位置）
             coordinator.drainPendingRequests()
         }
     }

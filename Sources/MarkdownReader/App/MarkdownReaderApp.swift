@@ -7,17 +7,13 @@ struct MarkdownReaderApp: App {
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    /// 自动更新 ViewModel
-    @State private var updateViewModel = UpdateViewModel()
+    /// 自动更新 ViewModel（Task 13：应用级共享实例）。
+    @State private var updateViewModel = UpdateViewModel.shared
 
     /// 应用级窗口协调器：每个窗口共享同一 Coordinator，统一路由与所有权。
     /// 由 App 持有，注入到每个 ContentView 的 WindowSession（Task 5/6）。
     /// Task 8：AppDelegate 和 App 共享同一 Coordinator 实例。
     @State private var windowCoordinator = AppDelegate.coordinator
-
-    /// WebView 预热：App 启动时创建隐藏 WebPage，预加载 HTML 模板 + JS 库
-    /// 首次打开文件时复用此 page，跳过 WKWebView 冷启动（~120ms → ~15-20ms）
-    @State private var warmupPage: WebPage?
 
     init() {
         DispatchQueue.main.async {
@@ -34,30 +30,6 @@ struct MarkdownReaderApp: App {
     /// 最近打开记录（从 SettingsModel 读取，用于菜单动态生成）
     private var recentItems: [RecentItem] {
         SettingsModel.shared.recentItems
-    }
-
-    /// 预热 WebView：创建隐藏 WebPage 并加载空白 HTML 模板
-    /// 让 WKWebView 进程和 JS 引擎提前初始化，首次打开文件时跳过冷启动
-    private func warmupWebView() {
-        let scheme = URLScheme("mr")!
-        let handler = MarkdownURLSchemeHandler(baseURL: nil)
-        var configuration = WebPage.Configuration()
-        configuration.urlSchemeHandlers[scheme] = handler
-        let page = WebPage(configuration: configuration)
-        let html = """
-        <!DOCTYPE html><html><head>
-        <link rel="stylesheet" href="mr:///css/markdown.css">
-        <link rel="stylesheet" href="mr:///css/katex.min.css">
-        <script src="mr:///js/mermaid.min.js"></script>
-        <script src="mr:///js/katex.min.js"></script>
-        <script src="mr:///js/prism-core.min.js"></script>
-        <script src="mr:///js/prism-autoloader.min.js"></script>
-        <script>Prism.plugins.autoloader.languages_path = 'mr:///js/';</script>
-        <script src="mr:///js/markdown-reader.js"></script>
-        </head><body><div class="markdown-preview"><div id="mr-content"></div></div></body></html>
-        """
-        _ = page.load(html: html, baseURL: URL(string: "about:blank")!)
-        warmupPage = page
     }
 
     /// 打开最近的子菜单（文件在上、目录在下，不显示分区标题）
@@ -128,15 +100,14 @@ struct MarkdownReaderApp: App {
                }
                 // 热启动时路由到现有窗口，而非创建新窗口
                 .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
-                // 自动更新弹窗
+                // 自动更新弹窗（应用级 UpdateViewModel.shared）
                 .sheet(isPresented: $updateViewModel.isShowingUpdateSheet) {
                     UpdateView(viewModel: updateViewModel)
                 }
-                // 启动时自动检查更新（延迟 2 秒，避免影响启动速度）
+                // Task 13：应用级一次性服务（WebView 预热 + 自动更新检查）
+                // 由 AppStartupCoordinator 幂等执行，不在每窗口 .task 重复。
                 .task {
-                    warmupWebView()
-                    try? await Task.sleep(for: .seconds(2))
-                    updateViewModel.checkForUpdatesAutomatically()
+                    AppStartupCoordinator.shared.performAppLevelStartupOnce()
                 }
                 // 监听手动检查更新通知
                 .onReceive(NotificationCenter.default.publisher(for: .checkForUpdates)) { _ in

@@ -166,17 +166,36 @@ final class SettingsModel {
 
     // MARK: - 上次位置记忆
 
-    /// 上次打开的目录 URL
+    /// 上次打开的目录 URL。
+    /// Task 13：仅最后活动窗口可更新（经 recordLastOpened），后台窗口不得覆盖。
     var lastOpenedDirectory: URL? {
         didSet {
             defaults.set(lastOpenedDirectory?.path, forKey: Keys.lastOpenedDirectory)
         }
     }
 
-    /// 上次打开的单文件 URL
+    /// 上次打开的单文件 URL。
+    /// Task 13：仅最后活动窗口可更新（经 recordLastOpened），后台窗口不得覆盖。
     var lastOpenedFile: URL? {
         didSet {
             defaults.set(lastOpenedFile?.path, forKey: Keys.lastOpenedFilePath)
+        }
+    }
+
+    /// Task 13：记录最后打开位置。仅当本窗口是 Coordinator 的最后活动窗口时才写入，
+    /// 防止后台窗口加载/切换覆盖主窗口的位置记忆。
+    /// - Parameters:
+    ///   - file: 打开的文件 URL（nil 表示目录模式）
+    ///   - directory: 打开的目录 URL（nil 表示单文件模式）
+    ///   - isActive: 本窗口是否为最后活动窗口（由调用方查 coordinator.lastActiveWindowID == windowID）
+    func recordLastOpened(file: URL?, directory: URL?, isActive: Bool) {
+        guard isActive else { return }
+        if let directory {
+            lastOpenedDirectory = directory
+            lastOpenedFile = nil
+        } else if let file {
+            lastOpenedFile = file
+            lastOpenedDirectory = nil
         }
     }
 

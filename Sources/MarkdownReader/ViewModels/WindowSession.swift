@@ -139,6 +139,18 @@ final class WindowSession {
 
     // MARK: - 目录树选择前路由
 
+    /// Task 13：本窗口是否为 Coordinator 记录的最后活动窗口。
+    /// 用于限制 lastOpenedFile/Directory 写入，防止后台窗口覆盖主窗口位置记忆。
+    var isLastActiveWindow: Bool {
+        coordinator?.lastActiveWindowID == id
+    }
+
+    /// Task 13：记录最后打开位置（仅最后活动窗口写入）。
+    func recordLastOpened(file: URL?, directory: URL?) {
+        let settings = SettingsModel.shared
+        settings.recordLastOpened(file: file, directory: directory, isActive: isLastActiveWindow)
+    }
+
     /// 用户在目录树点击文件前的路由。
     /// 若文件已被其他窗口持有，**不修改** selectedFileURL，激活 owner 窗口。
     func requestFileSelection(_ url: URL) {
@@ -242,7 +254,7 @@ final class WindowSession {
                 self.fileTreeViewModel.selectedFileURL = saveURL
             }
 
-            settings.lastOpenedFile = saveURL
+            settings.recordLastOpened(file: saveURL, directory: nil, isActive: isLastActiveWindow)
             settings.addRecentItem(url: saveURL, isDirectory: false)
             self.documentViewModel.isSavePanelShowing = false
         }
