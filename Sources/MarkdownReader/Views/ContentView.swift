@@ -3,10 +3,20 @@ import MarkdownReaderKit
 
 /// 主视图，管理自定义 HStack 两列布局
 /// 设置模式下左侧显示设置菜单，右侧显示设置内容
+///
+/// 每个窗口通过 `WindowSession` 注入窗口级业务对象（Task 5 Step 4）。
+/// `ContentView` 不再自行创建 ViewModel，而是从 session 派生，保证
+/// 多窗口下各窗口拥有独立的文件、目录、编辑、命令面板状态。
 struct ContentView: View {
-    @State private var appViewModel = AppViewModel()
-    @State private var fileTreeViewModel = FileTreeViewModel()
-    @State private var documentViewModel = DocumentViewModel()
+    /// 本窗口的会话边界（由 WindowSceneHost/WindowGroup 注入）。
+    let session: WindowSession
+
+    /// 从 session 派生的窗口级 ViewModel，保持原有调用点不变。
+    private var appViewModel: AppViewModel { session.appViewModel }
+    private var fileTreeViewModel: FileTreeViewModel { session.fileTreeViewModel }
+    private var documentViewModel: DocumentViewModel { session.documentViewModel }
+    private var commandPaletteViewModel: CommandPaletteViewModel { session.commandPaletteViewModel }
+
     @State private var settings = SettingsModel.shared
     @Environment(\.language) private var language
     @Environment(\.colorScheme) private var colorScheme
@@ -16,8 +26,6 @@ struct ContentView: View {
     @State private var themeColors: ThemeColors = ThemeColors.from(
         SettingsModel.shared.resolvedTheme
     )
-    /// 命令面板 ViewModel
-    @State private var commandPaletteViewModel = CommandPaletteViewModel()
 
     var body: some View {
         mainLayout
@@ -60,8 +68,7 @@ struct ContentView: View {
             .background(WindowCloseGuard(documentViewModel: documentViewModel, settings: settings))
             .background(KeyWindowTracker(documentViewModel: documentViewModel))
             .task {
-                // 连接 FileTreeViewModel 与 DocumentViewModel
-                fileTreeViewModel.documentViewModel = documentViewModel
+                // ViewModel 间依赖连接已由 WindowSession.init 完成，不在此重复连接。
                 applyAppearance(settings.appearanceMode)
 
                 // 后备机制：清理 UserDefaults 中残留的待打开路径

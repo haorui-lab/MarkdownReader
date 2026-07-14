@@ -10,6 +10,10 @@ struct MarkdownReaderApp: App {
     /// 自动更新 ViewModel
     @State private var updateViewModel = UpdateViewModel()
 
+    /// 应用级窗口协调器：每个窗口共享同一 Coordinator，统一路由与所有权。
+    /// 由 App 持有，注入到每个 ContentView 的 WindowSession（Task 5/6）。
+    @State private var windowCoordinator = WindowCoordinator()
+
     /// WebView 预热：App 启动时创建隐藏 WebPage，预加载 HTML 模板 + JS 库
     /// 首次打开文件时复用此 page，跳过 WKWebView 冷启动（~120ms → ~15-20ms）
     @State private var warmupPage: WebPage?
@@ -106,7 +110,13 @@ struct MarkdownReaderApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // 单窗口过渡期：主窗口仍由默认 WindowGroup 创建。
+            // 此处创建一次性 session 注入 ContentView；Task 6 切换为 data-driven
+            // WindowGroup(for: WindowID.self) 后由 WindowSceneHost 统一创建 session。
+            ContentView(session: WindowSession(
+                id: WindowID(),
+                coordinator: windowCoordinator
+            ))
                 // .onOpenURL 在 macOS 15+ 不触发 file-open 事件
                 // 保留作为安全网，以防未来 macOS 版本行为变化
                 .onOpenURL { url in
