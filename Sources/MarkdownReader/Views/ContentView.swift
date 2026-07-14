@@ -170,7 +170,8 @@ struct ContentView: View {
                     documentViewModel: documentViewModel,
                     fileTreeViewModel: fileTreeViewModel,
                     settings: settings,
-                    undoStore: session.undoStore
+                    undoStore: session.undoStore,
+                    owningWindow: session.window
                 )
             }
         }

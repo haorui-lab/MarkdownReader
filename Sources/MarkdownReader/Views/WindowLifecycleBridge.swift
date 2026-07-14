@@ -52,6 +52,11 @@ private struct LifecycleAnchor: NSViewRepresentable {
             // Task 10：绑定 undoStore 到 NSWindow，使 swizzled getter 无需全局状态
             window.undoStore = session.undoStore
 
+            // Task 11：安装本窗口专属的文件拖拽 overlay。
+            // overlay 回调直接路由到 Coordinator 并携带本 session 的 windowID，
+            // 不再发全局通知（dragHoverChanged/unsupportedFileTypeDropped）。
+            installDropOverlay(in: window, for: session)
+
             // 2. 观察该窗口关闭，触发 dispose
             let close = NotificationCenter.default.addObserver(
                 forName: NSWindow.willCloseNotification,
@@ -63,5 +68,95 @@ private struct LifecycleAnchor: NSViewRepresentable {
             }
             observers = [close]
         }
+
+        /// 安装窗口级拖拽 overlay（Task 11）。
+        /// overlay 持有 session 回调：hover 与 unsupported 只更新本窗口 DetailView，
+        /// 打开经 Coordinator 路由（preferredWindowID = 本窗口，空白时复用）。
+        private func installDropOverlay(in window: NSWindow, for session: WindowSession) {
+            guard let contentView = window.contentView,
+                  let themeFrame = contentView.superview else { return }
+            // 已存在则不重复安装
+            if themeFrame.subviews.contains(where: { $0 is WindowDropOverlayView }) { return }
+
+            let overlay = WindowDropOverlayView()
+            overlay.session = session
+            themeFrame.addSubview(overlay)
+            overlay.frame = themeFrame.bounds
+            overlay.autoresizingMask = [.width, .height]
+        }
+    }
+}
+
+// MARK: - 窗口级文件拖拽 overlay（Task 11）
+
+/// 每窗口一份的拖拽 overlay，替代 AppDelegate 全局安装 + 全局通知。
+/// hover/open/unsupported 回调直接作用于所属 session，不经 NotificationCenter。
+final class WindowDropOverlayView: NSView {
+
+    private static let supportedExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "txt"]
+
+    /// 所属会话。弱引用避免环；session 释放后回调为 no-op。
+    weak var session: WindowSession?
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        registerForDraggedTypes([.fileURL, NSPasteboard.PasteboardType("NSFilenamesPboardType")])
+    }
+
+    override func draw(_ dirtyRect: NSRect) {}
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    // MARK: - NSDraggingDestination
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        guard canAcceptDrag(sender) else { return [] }
+        session?.appViewModel.isDropTargeted = true
+        return .copy
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        .copy
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        session?.appViewModel.isDropTargeted = false
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        session?.appViewModel.isDropTargeted = false
+
+        let pasteboard = sender.draggingPasteboard
+        let urls: [URL]
+        if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self],
+                                                   options: [.urlReadingFileURLsOnly: true]) as? [URL],
+           !fileURLs.isEmpty {
+            urls = fileURLs
+        } else if let paths = pasteboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String],
+                  !paths.isEmpty {
+            urls = paths.map { URL(fileURLWithPath: $0) }
+        } else {
+            return false
+        }
+        guard !urls.isEmpty else { return false }
+
+        // Task 11：经 Coordinator 路由，preferredWindowID 为本窗口（空白时复用，否则新窗口）
+        let request = OpenRequest(urls: urls, source: .dragDrop, preferredWindowID: session?.id)
+        session?.coordinator?.enqueue(request)
+        return true
+    }
+
+    override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool { true }
+
+    private func canAcceptDrag(_ sender: any NSDraggingInfo) -> Bool {
+        let pasteboard = sender.draggingPasteboard
+        if pasteboard.canReadObject(forClasses: [NSURL.self],
+                                     options: [.urlReadingFileURLsOnly: true]) {
+            return true
+        }
+        if pasteboard.types?.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType")) == true {
+            return true
+        }
+        return false
     }
 }

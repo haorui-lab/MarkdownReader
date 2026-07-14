@@ -48,8 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         didFinishLaunching = true
         logger.info("applicationDidFinishLaunching")
 
-        // 注册窗口拖拽
-        installFileDropHandler()
+        // 注册窗口拖拽：Task 11 起由 WindowLifecycleBridge 在每窗口挂载时安装
+        // 窗口级 WindowDropOverlayView，不再由 AppDelegate 全局安装。
 
         // 冷启动无 pending 外部文件时恢复上次位置
         // external 请求已在 application(_:open:) 中入队，Coordinator 会优先处理它们
@@ -82,30 +82,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // 无任何窗口：创建空白窗口
                 coordinator.openBlankWindow()
             }
-            installFileDropHandler()
+            // 拖拽 overlay 由 WindowLifecycleBridge 安装（Task 11）
         }
         return false
-    }
-
-    // MARK: - 窗口级拖拽处理
-
-    private func installFileDropHandler() {
-        for window in NSApp.windows {
-            guard window.isVisible,
-                  window.canBecomeKey,
-                  !(window is NSPanel),
-                  let contentView = window.contentView,
-                  let themeFrame = contentView.superview else { continue }
-
-            let existing = themeFrame.subviews.first(where: { $0 is FileDropOverlayView })
-            if existing != nil { continue }
-
-            let overlay = FileDropOverlayView()
-            themeFrame.addSubview(overlay)
-            overlay.frame = themeFrame.bounds
-            overlay.autoresizingMask = [.width, .height]
-            logger.info("FileDropOverlayView installed on theme frame of window '\(window.title)'")
-        }
     }
 
     // MARK: - Coordinator 访问
@@ -129,82 +108,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             coordinator.enqueue(request)
         }
-    }
-}
-
-// MARK: - 文件拖拽覆盖视图
-
-/// 透明 NSView 覆盖层，直接实现 NSDraggingDestination 处理文件拖拽。
-///
-/// Task 8：拖拽打开改为构造 OpenRequest 并通过 Coordinator 路由。
-final class FileDropOverlayView: NSView {
-
-    private let logger = Logger(subsystem: "com.markdownreader.app", category: "FileDropOverlay")
-
-    private static let supportedExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "txt"]
-
-    override func viewDidMoveToSuperview() {
-        super.viewDidMoveToSuperview()
-        registerForDraggedTypes([.fileURL, NSPasteboard.PasteboardType("NSFilenamesPboardType")])
-    }
-
-    override func draw(_ dirtyRect: NSRect) {}
-
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-    // MARK: - NSDraggingDestination
-
-    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        let canAccept = canAcceptDrag(sender)
-        guard canAccept else { return [] }
-        NotificationCenter.default.post(name: .dragHoverChanged, object: true)
-        return .copy
-    }
-
-    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        .copy
-    }
-
-    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
-        NotificationCenter.default.post(name: .dragHoverChanged, object: false)
-    }
-
-    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        NotificationCenter.default.post(name: .dragHoverChanged, object: false)
-
-        let pasteboard = sender.draggingPasteboard
-
-        let urls: [URL]
-        if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self],
-                                                   options: [.urlReadingFileURLsOnly: true]) as? [URL],
-           !fileURLs.isEmpty {
-            urls = fileURLs
-        } else if let paths = pasteboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String],
-                  !paths.isEmpty {
-            urls = paths.map { URL(fileURLWithPath: $0) }
-        } else {
-            return false
-        }
-
-        guard !urls.isEmpty else { return false }
-
-        // Task 8：通过 Coordinator 统一路由拖拽打开的 URL
-        let request = OpenRequest(urls: urls, source: .dragDrop)
-        AppDelegate.coordinator.enqueue(request)
-        return true
-    }
-
-    override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool { true }
-
-    private func canAcceptDrag(_ sender: any NSDraggingInfo) -> Bool {
-        let pasteboard = sender.draggingPasteboard
-        if pasteboard.canReadObject(forClasses: [NSURL.self],
-                                     options: [.urlReadingFileURLsOnly: true]) {
-            return true
-        }
-        if pasteboard.types?.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType")) == true {
-            return true
-        }
-        return false
     }
 }

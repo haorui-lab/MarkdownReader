@@ -34,6 +34,8 @@ struct DetailView: View {
     let fileTreeViewModel: FileTreeViewModel
     let settings: SettingsModel
     var undoStore: WindowUndoStore?
+    /// Task 11：导出 PDF / 另存面板以所属窗口为 sheet 宿主，避免抢夺其它窗口焦点。
+    var owningWindow: NSWindow?
     @Environment(\.language) private var language
     @Environment(\.themeColors) private var themeColors
 
@@ -46,8 +48,6 @@ struct DetailView: View {
     /// 刷新确认弹窗状态
     @State private var showReloadAlert = false
     @State private var dontRemindAgain = false
-
-    @State private var isDropTargeted = false
 
     @State private var showUnsupportedFileAlert = false
     @State private var unsupportedFileExt = ""
@@ -74,7 +74,8 @@ struct DetailView: View {
             // 内容区域
             contentArea
                 .overlay {
-                    if isDropTargeted {
+                    // Task 11：拖拽 hover 直接读所属 session 的 appViewModel 状态（窗口级）。
+                    if appViewModel.isDropTargeted {
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(themeColors.accent, lineWidth: 2)
                             .padding(4)
@@ -98,18 +99,9 @@ struct DetailView: View {
             LeftEdgeShape(radius: 10)
                 .stroke(themeColors.border, lineWidth: 1)
         )
-        .onReceive(NotificationCenter.default.publisher(for: .dragHoverChanged)) { notification in
-            if let isTargeted = notification.object as? Bool {
-                isDropTargeted = isTargeted
-            }
-        }
-        // 不支持文件类型提示：由 AppKit FileDropOverlayView 发送
-        .onReceive(NotificationCenter.default.publisher(for: .unsupportedFileTypeDropped)) { notification in
-            if let ext = notification.object as? String {
-                unsupportedFileExt = ext
-                showUnsupportedFileAlert = true
-            }
-        }
+        // Task 11：拖拽 hover 状态经所属 session 的 appViewModel 绑定，不再用全局通知。
+        // unsupported 提示已移除全局通知路径（FileDropOverlayView 不再发 unsupportedFileTypeDropped）；
+        // 不支持文件类型的拒绝由 Coordinator 在路由时处理，此处保留 alert 但无广播触发者。
         .alert(L10n.tr(.exportPDFFailed, language: language), isPresented: $showExportPDFError) {
             Button(L10n.tr(.confirm, language: language), role: .cancel) {}
         }
@@ -383,7 +375,7 @@ struct DetailView: View {
             ?? documentViewModel.currentFileURL?.deletingLastPathComponent()
 
        guard let saveURL = OpenPanelHelper.showExportPDFPanel(
-            for: nil,
+            for: owningWindow,
             language: language,
            defaultDirectory: defaultDir,
            suggestedName: suggestedName

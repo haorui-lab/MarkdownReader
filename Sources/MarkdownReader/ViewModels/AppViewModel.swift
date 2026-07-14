@@ -90,6 +90,12 @@ final class AppViewModel {
     /// 查找面板是否可见
     var isFindBarVisible: Bool = false
 
+    // MARK: - 拖拽状态（Task 11：窗口级）
+
+    /// 文件拖拽悬停于本窗口。由本窗口的 WindowDropOverlayView 直接写入，
+    /// 不再经全局通知，确保多窗口下只高亮被拖入的窗口。
+    var isDropTargeted: Bool = false
+
     // MARK: - 命令面板状态
 
     /// 命令面板是否可见
