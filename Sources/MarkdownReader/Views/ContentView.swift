@@ -37,10 +37,9 @@ struct ContentView: View {
             .applyThemeColors(themeColors)
             .tint(themeColors.accent)
             .modifier(FullScreenStateModifier(appViewModel: appViewModel))
-            .modifier(KeyboardShortcutModifier(
-                appViewModel: appViewModel,
-                documentViewModel: documentViewModel
-            ))
+            // Task 7：toggleSidebar / switchDisplayMode 等窗口级命令已迁移到
+            // FocusedValues（WindowCommandTarget），不再经通知广播。KeyboardShortcutModifier
+            // 中的对应监听已移除，此处保留空 modifier 占位以最小化改动。
             .modifier(FileOpenModifier(
                 appViewModel: appViewModel,
                 documentViewModel: documentViewModel,
@@ -63,7 +62,7 @@ struct ContentView: View {
                 fileTreeViewModel: fileTreeViewModel,
                 settings: settings
             ))
-            .modifier(ToggleSettingsModifier(appViewModel: appViewModel))
+            .modifier(ToggleSettingsModifier())
             .background(TrafficLightHider(bgColor: themeColors.bgSubtle))
             .background(WindowCloseGuard(documentViewModel: documentViewModel, settings: settings))
             .background(KeyWindowTracker(documentViewModel: documentViewModel))
@@ -193,9 +192,6 @@ struct ContentView: View {
                 }
                 .transition(.opacity)
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleCommandPalette)) { _ in
-            toggleCommandPalette()
         }
         .onChange(of: commandPaletteViewModel.isVisible) { _, visible in
             if !visible && appViewModel.isCommandPaletteVisible {
@@ -445,24 +441,9 @@ private struct FullScreenStateModifier: ViewModifier {
 }
 
 // MARK: - 快捷键监听
-
-private struct KeyboardShortcutModifier: ViewModifier {
-    let appViewModel: AppViewModel
-    let documentViewModel: DocumentViewModel
-
-    func body(content: Content) -> some View {
-        content
-            .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in
-                appViewModel.toggleSidebar()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .switchToRendered)) { _ in
-                documentViewModel.switchDisplayMode(.rendered)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .switchToRaw)) { _ in
-                documentViewModel.switchDisplayMode(.raw)
-            }
-    }
-}
+// Task 7：KeyboardShortcutModifier 的窗口级通知监听（toggleSidebar /
+// switchToRendered / switchToRaw）已迁移到 FocusedValues 命令路由，
+// 该 modifier 不再需要内容，移除以避免冗余广播监听。
 
 // MARK: - 文件打开通知
 
@@ -528,9 +509,10 @@ private struct FileOpenModifier: ViewModifier {
                 // 但如果文件被外部修改，触发带确认的 reload 流程（避免有未保存编辑时直接丢弃）
                 if documentViewModel.currentFileURL == url {
                     if documentViewModel.isFileModifiedExternally {
-                        // 不直接调用 reloadFromDisk()，而是发送 reloadFile 通知
-                        // 让 DetailView 的 handleReloadButtonTapped() 处理（含脏文件确认弹窗）
-                        NotificationCenter.default.post(name: .reloadFile, object: nil)
+                        // Task 7：经焦点窗口命令目标触发 reload（含脏文件确认弹窗），
+                        // 不再 post .reloadFile 通知。
+                        @FocusedValue(\.windowCommandTarget) var target
+                        target?.perform(.reloadFile)
                     }
                     return
                 }
@@ -564,75 +546,6 @@ private struct FileOpenModifier: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .openLinkedMarkdownFile)) { notification in
                 guard let url = notification.object as? URL else { return }
                 handleLinkedMarkdownFileOpen(url.standardizedFileURL)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .newFile)) { _ in
-                // 仅 key 窗口处理（多窗口时），避免隐藏的第二窗口重复创建未保存文件
-                guard documentViewModel.isKeyWindow || !SingleWindow.hasMultipleMainWindows else { return }
-                if documentViewModel.isUntitled && documentViewModel.isDirty {
-                    handleUnsavedChangesBeforeAction { proceed in
-                        guard proceed else { return }
-                        let result = documentViewModel.createUntitledFile()
-                        guard result != nil else { return }
-                        fileTreeViewModel.selectedFileURL = nil
-                        appViewModel.selectedFile = nil
-                        appViewModel.hasUnsavedUntitled = true
-                        appViewModel.untitledFileName = documentViewModel.fileName
-                    }
-                } else {
-                    let result = documentViewModel.createUntitledFile()
-                    guard result != nil else { return }
-                    fileTreeViewModel.selectedFileURL = nil
-                    appViewModel.selectedFile = nil
-                    appViewModel.hasUnsavedUntitled = true
-                    appViewModel.untitledFileName = documentViewModel.fileName
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in
-                // 仅 key 窗口处理（多窗口时），避免隐藏的第二窗口重复弹保存框
-                guard documentViewModel.isKeyWindow || !SingleWindow.hasMultipleMainWindows else { return }
-                // 重入保护：如果正在保存或保存面板已显示，跳过
-                guard !documentViewModel.isSaving && !documentViewModel.isSavePanelShowing else { return }
-                Task {
-                    await documentViewModel.save()
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .saveAsFile)) { _ in
-                // 仅 key 窗口处理（多窗口时），避免隐藏的第二窗口重复弹保存框
-                guard documentViewModel.isKeyWindow || !SingleWindow.hasMultipleMainWindows else { return }
-                // 重入保护：如果保存面板已经在显示，跳过
-                guard !documentViewModel.isSavePanelShowing else { return }
-                documentViewModel.isSavePanelShowing = true
-
-                let language = settings.languagePref.resolvedLanguage
-                let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
-                let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
-
-                if let saveURL = OpenPanelHelper.showSavePanel(
-                    language: language,
-                    defaultDirectory: defaultDir,
-                    suggestedName: suggestedName
-                ) {
-                    Task {
-                        await documentViewModel.saveAs(to: saveURL)
-                        appViewModel.hasUnsavedUntitled = false
-
-                        if let rootDir = appViewModel.rootDirectory,
-                           saveURL.path.hasPrefix(rootDir.path + "/") {
-                            await fileTreeViewModel.loadDirectory(rootDir)
-                            fileTreeViewModel.selectedFileURL = saveURL
-                        }
-
-                        // 更新最近打开记录
-                        settings.lastOpenedFile = saveURL
-                        settings.addRecentItem(url: saveURL, isDirectory: false)
-
-                        // 保存完成后才重置标志，避免 saveAs 尚未完成时 isSavePanelShowing 已为 false
-                        documentViewModel.isSavePanelShowing = false
-                    }
-                } else {
-                    // 用户取消了保存面板，立即重置标志
-                    documentViewModel.isSavePanelShowing = false
-                }
             }
     }
 
@@ -963,15 +876,10 @@ private struct SettingsChangeModifier: ViewModifier {
 }
 
 // MARK: - 切换设置（Cmd+,）
-
+// Task 7：toggleSettings 已迁移到 FocusedValues 命令路由，此 modifier 不再监听通知。
 private struct ToggleSettingsModifier: ViewModifier {
-    let appViewModel: AppViewModel
-
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: .toggleSettings)) { _ in
-                appViewModel.toggleSettings()
-            }
     }
 }
 

@@ -26,6 +26,8 @@ struct WindowSceneHost: View {
     var body: some View {
         ContentView(session: session)
             .background(WindowLifecycleBridge(session: session))
+            // Task 7：把焦点窗口的命令目标发布到 FocusedValues，菜单命令据此路由。
+            .focusedSceneValue(\.windowCommandTarget, session.commandTarget)
             .task {
                 // 安装 OpenWindowAction，使 Coordinator 可创建新窗口（幂等）
                 coordinator.install(openWindowAction: openWindow)

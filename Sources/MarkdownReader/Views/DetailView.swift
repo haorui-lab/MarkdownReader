@@ -97,13 +97,6 @@ struct DetailView: View {
             LeftEdgeShape(radius: 10)
                 .stroke(themeColors.border, lineWidth: 1)
         )
-        .onReceive(NotificationCenter.default.publisher(for: .reloadFile)) { _ in
-            handleReloadButtonTapped()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .exportPDF)) { _ in
-            exportPDF()
-        }
-        // 拖拽视觉反馈：由 AppKit FileDropOverlayView 发送
         .onReceive(NotificationCenter.default.publisher(for: .dragHoverChanged)) { notification in
             if let isTargeted = notification.object as? Bool {
                 isDropTargeted = isTargeted
@@ -160,7 +153,9 @@ struct DetailView: View {
 
                 // 新建文件按钮（始终可用，无需打开目录）
                 Button {
-                    NotificationCenter.default.post(name: .newFile, object: nil)
+                    // Task 7：经焦点窗口命令目标路由，不广播。
+                    @FocusedValue(\.windowCommandTarget) var target
+                    target?.perform(.newFile)
                 } label: {
                     Image(systemName: "doc.badge.plus")
                         .font(.system(size: 14))
@@ -238,7 +233,9 @@ struct DetailView: View {
                 // 保存按钮（在渲染模式切换右侧）
                 if documentViewModel.hasDocument {
                     Button {
-                        NotificationCenter.default.post(name: .saveFile, object: nil)
+                        // Task 7：经焦点窗口命令目标路由，不广播。
+                        @FocusedValue(\.windowCommandTarget) var target
+                        target?.perform(.save)
                     } label: {
                         Image(systemName: "arrow.down.doc.fill")
                             .font(.system(size: 14))
@@ -648,9 +645,30 @@ struct DetailView: View {
         .onChange(of: findReplaceViewModel.isCaseSensitive) { _, _ in performSearch() }
         .onChange(of: findReplaceViewModel.isWholeWord) { _, _ in performSearch() }
         .onChange(of: findReplaceViewModel.isRegularExpression) { _, _ in performSearch() }
-        .onReceive(NotificationCenter.default.publisher(for: .findInDocument)) { _ in openFindBar() }
-        .onReceive(NotificationCenter.default.publisher(for: .findNext)) { _ in performFindNext() }
-        .onReceive(NotificationCenter.default.publisher(for: .findPrevious)) { _ in performFindPrevious() }
-        .onReceive(NotificationCenter.default.publisher(for: .findAndReplace)) { _ in openFindAndReplace() }
+        // Task 7：查找命令经 FocusedValues 路由到本窗口。DetailView 注入自身的
+        // 命令目标到环境，使 find/reload/exportPDF 等 UI 上下文命令能命中本视图。
+        .focusedSceneValue(\.windowCommandTarget, makeCommandTarget())
+    }
+
+    /// 构造本 DetailView 的命令目标，注册 find/reload/exportPDF 等 UI 上下文 handler。
+    /// 注意：此 target 与 WindowSceneHost 发布的 session.commandTarget 是同一焦点键；
+    /// SwiftUI 后注册的会覆盖前者。为避免覆盖焦点路由，DetailView 不发布独立 target，
+    /// 而是把 handler 挂到环境中的 target 上。因此这里读取环境 target 并回填 handler。
+    @MainActor
+    private func makeCommandTarget() -> WindowCommandTarget {
+        // 取环境中的焦点 target（由 WindowSceneHost 发布，绑定本窗口 session）
+        @FocusedValue(\.windowCommandTarget) var envTarget
+        let target = envTarget ?? WindowCommandTarget(session: nil)
+        target.findHandler = { cmd in
+            switch cmd {
+            case .find: openFindBar()
+            case .findNext: performFindNext()
+            case .findPrevious: performFindPrevious()
+            case .findAndReplace: openFindAndReplace()
+            }
+        }
+        target.reloadHandler = { handleReloadButtonTapped() }
+        target.exportPDFHandler = { exportPDF() }
+        return target
     }
 }

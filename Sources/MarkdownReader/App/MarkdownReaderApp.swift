@@ -155,135 +155,14 @@ struct MarkdownReaderApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 900, height: 600)
         .windowResizability(.automatic)
+        // Task 7：窗口级菜单命令经 FocusedValues 路由到焦点窗口，
+        // 应用级命令（About / 检查更新 / 帮助 / 清除最近记录）保留应用服务调用。
         .commands {
-            // 设置菜单：Cmd+, → 切换窗口内设置状态
-            CommandGroup(replacing: .appInfo) {
-                Button(L10n.tr(.aboutTitle, language: language)) {
-                    AboutWindowController.show(language: language)
-                }
-            }
+            MarkdownReaderCommands(language: language)
 
-            CommandGroup(replacing: .appSettings) {
-                Button(L10n.tr(.settingsMenuLabel, language: language)) {
-                    NotificationCenter.default.post(name: .toggleSettings, object: nil)
-                }
-                .keyboardShortcut(",", modifiers: .command)
-
-                // 检查更新
-                Button(L10n.tr(.checkForUpdates, language: language)) {
-                    NotificationCenter.default.post(name: .checkForUpdates, object: nil)
-                }
-            }
-
-            // 文件菜单：新建 + 打开 + 保存 + 打开最近
-            CommandGroup(replacing: .newItem) {
-                Button(L10n.tr(.menuNewFile, language: language)) {
-                    NotificationCenter.default.post(name: .newFile, object: nil)
-                }
-                .keyboardShortcut("n", modifiers: .command)
-
-                Button(L10n.tr(.open, language: language) + "...") {
-                    OpenPanelHelper.show(language: language)
-                }
-                .keyboardShortcut("o", modifiers: .command)
-
-                Button(L10n.tr(.titleBarSave, language: language)) {
-                    NotificationCenter.default.post(name: .saveFile, object: nil)
-                }
-                .keyboardShortcut("s", modifiers: .command)
-
-                Button(L10n.tr(.exportPDF, language: language)) {
-                    NotificationCenter.default.post(name: .exportPDF, object: nil)
-                }
-                .keyboardShortcut("e", modifiers: [.command, .option])
-
-                // 打开最近子菜单
+            // 打开最近子菜单（文件打开入口由 Task 8 统一路由，此处保留 recent 菜单结构）
+            CommandGroup(after: .newItem) {
                 openRecentMenu
-            }
-
-            // 移除 WindowGroup 自动添加的默认 Save/Save As 菜单项
-            // 这些默认菜单项绑定 Cmd+S，会触发系统自带的 NSSavePanel，
-            // 与自定义的 .saveFile 通知机制冲突，导致保存面板重复弹出
-            CommandGroup(replacing: .saveItem) {
-                Button(L10n.tr(.closeWindow, language: language)) {
-                    NSApp.keyWindow?.performClose(nil)
-                }
-                .keyboardShortcut("w", modifiers: .command)
-            }
-
-            // 视图菜单：Sidebar 切换
-            CommandGroup(after: .toolbar) {
-                Button(L10n.tr(.titleBarToggleSidebar, language: language)) {
-                    NotificationCenter.default.post(name: .toggleSidebar, object: nil)
-                }
-                .keyboardShortcut("\\", modifiers: .command)
-
-                Button(L10n.tr(.commandPaletteTitle, language: language)) {
-                    NotificationCenter.default.post(name: .toggleCommandPalette, object: nil)
-                }
-                .keyboardShortcut("p", modifiers: .command)
-
-                Divider()
-
-                Button(L10n.tr(.displayModeRendered, language: language)) {
-                    NotificationCenter.default.post(name: .switchToRendered, object: nil)
-                }
-                .keyboardShortcut("e", modifiers: [.command, .shift])
-
-                Button(L10n.tr(.displayModeRaw, language: language)) {
-                    NotificationCenter.default.post(name: .switchToRaw, object: nil)
-                }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-
-                Divider()
-
-                Button(L10n.tr(.viewZoomIn, language: language)) {
-                    NotificationCenter.default.post(name: .zoomIn, object: nil)
-                }
-                .keyboardShortcut("+", modifiers: .command)
-
-                Button(L10n.tr(.viewZoomOut, language: language)) {
-                    NotificationCenter.default.post(name: .zoomOut, object: nil)
-                }
-                .keyboardShortcut("-", modifiers: .command)
-
-                Button(L10n.tr(.viewZoomReset, language: language)) {
-                    NotificationCenter.default.post(name: .zoomReset, object: nil)
-                }
-                .keyboardShortcut("0", modifiers: .command)
-            }
-
-            // 查找菜单
-            CommandMenu(L10n.tr(.findBarFind, language: language)) {
-                Button(L10n.tr(.findBarFind, language: language) + "\u{2026}") {
-                    NotificationCenter.default.post(name: .findInDocument, object: nil)
-                }
-                .keyboardShortcut("f", modifiers: .command)
-
-                Button(L10n.tr(.findBarFindNext, language: language)) {
-                    NotificationCenter.default.post(name: .findNext, object: nil)
-                }
-                .keyboardShortcut("g", modifiers: .command)
-
-                Button(L10n.tr(.findBarFindPrevious, language: language)) {
-                    NotificationCenter.default.post(name: .findPrevious, object: nil)
-                }
-                .keyboardShortcut("g", modifiers: [.command, .shift])
-
-                Button(L10n.tr(.findBarFindAndReplace, language: language) + "\u{2026}") {
-                    NotificationCenter.default.post(name: .findAndReplace, object: nil)
-                }
-                .keyboardShortcut("f", modifiers: [.command, .option])
-            }
-
-            // 帮助菜单：替换系统默认帮助搜索，改为打开在线帮助页面
-            CommandGroup(replacing: .help) {
-                Button(L10n.tr(.helpMarkdownReader, language: language)) {
-                    if let url = URL(string: "https://davidhoo.github.io/MarkdownReader/help.html") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }
-                .keyboardShortcut("?", modifiers: .command)
             }
         }
     }

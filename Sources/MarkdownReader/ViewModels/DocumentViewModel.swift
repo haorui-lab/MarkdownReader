@@ -382,9 +382,9 @@ final class DocumentViewModel {
 
         // 未保存的新建文件需要另存为
         if isUntitled {
-            // 如果保存面板已经在显示，不重复发送通知
-            guard !isSavePanelShowing else { return false }
-            NotificationCenter.default.post(name: .saveAsFile, object: nil)
+            // Task 7：不再 post .saveAsFile 通知。Untitled 保存走 WindowSession.handleSaveAs；
+            // 调用方（菜单/标题栏保存按钮）经 FocusedValues 路由。此处返回 false 表示
+            // 普通 save 未真正落盘，由上层触发 saveAs 流程。
             return false
         }
 

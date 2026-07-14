@@ -183,19 +183,28 @@ struct WebViewMarkdownView: View {
             .onDisappear {
                 scrollSyncTimer?.invalidate()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in
-                applyZoom(zoomLevel + 0.1)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in
-                applyZoom(zoomLevel - 0.1)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .zoomReset)) { _ in
-                applyZoom(1.0)
-            }
+            // Task 7：缩放命令经 FocusedValues 路由到本窗口，注册 zoom handler
+            // 替代无目标的 .zoomIn/.zoomOut/.zoomReset 广播。
+            .focusedSceneValue(\.windowCommandTarget, makeZoomCommandTarget())
             .environment(\.openURL, OpenURLAction { url in
                 NSWorkspace.shared.open(url)
                 return .handled
             })
+    }
+
+    /// 把 zoom handler 挂到环境中的焦点 target（由 WindowSceneHost 发布）。
+    @MainActor
+    private func makeZoomCommandTarget() -> WindowCommandTarget {
+        @FocusedValue(\.windowCommandTarget) var envTarget
+        let target = envTarget ?? WindowCommandTarget(session: nil)
+        target.zoomHandler = { cmd in
+            switch cmd {
+            case .in: applyZoom(zoomLevel + 0.1)
+            case .out: applyZoom(zoomLevel - 0.1)
+            case .reset: applyZoom(1.0)
+            }
+        }
+        return target
     }
 
     private func configureAndLoad() {

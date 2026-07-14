@@ -21,6 +21,10 @@ final class WindowSession {
     let documentViewModel: DocumentViewModel
     let commandPaletteViewModel: CommandPaletteViewModel
 
+    /// 命令目标：菜单命令经 FocusedValues 路由到此（Task 7）。
+    /// 由 session 持有，弱引用自身，session 释放后自动 no-op。
+    let commandTarget: WindowCommandTarget
+
     /// 注入的资源身份服务，避免每次调用时新建实例。
     private let identityService: ResourceIdentityService
 
@@ -74,6 +78,7 @@ final class WindowSession {
         self.commandPaletteViewModel = CommandPaletteViewModel()
         self.identityService = identityService
         self.coordinator = coordinator
+        self.commandTarget = WindowCommandTarget(session: nil)
 
         // 连接 ViewModel 间依赖（原 ContentView.task 中的逻辑）
         self.fileTreeViewModel.documentViewModel = documentViewModel
@@ -83,6 +88,9 @@ final class WindowSession {
             documentViewModel: documentViewModel,
             settings: settings
         )
+
+        // commandTarget 弱引用本 session（init 后回填，避免 self 未完成初始化）
+        self.commandTarget.session = self
     }
 
     // MARK: - 资源打开
@@ -148,6 +156,72 @@ final class WindowSession {
     /// 由 WindowLifecycleBridge.windowWillClose 调用。
     func dispose() {
         coordinator?.unregister(windowID: id)
+    }
+
+    // MARK: - 窗口级命令（Task 7：替代无目标通知广播）
+
+    /// 新建未保存文件：脏 Untitled 时先询问是否放弃，再创建。
+    /// 注意：未保存确认弹窗需要 UI 上下文，目前直接在脏 Untitled 时跳过创建以避免
+    /// 数据丢失；完整确认流程由调用方（菜单/按钮）在视图层处理。此处保留基础语义，
+    /// 保证菜单 New File 在焦点窗口生效而不广播。
+    func handleNewFile() {
+        if documentViewModel.isUntitled && documentViewModel.isDirty {
+            // 脏 Untitled：不静默覆盖，交由视图层弹窗后再调 createUntitledFile。
+            // 菜单路径下此处直接返回，避免丢失未保存内容。
+            return
+        }
+        guard documentViewModel.createUntitledFile() != nil else { return }
+        fileTreeViewModel.selectedFileURL = nil
+        appViewModel.selectedFile = nil
+        appViewModel.hasUnsavedUntitled = true
+        appViewModel.untitledFileName = documentViewModel.fileName
+    }
+
+    /// 保存当前文件（含重入保护）。
+    func handleSave() {
+        guard !documentViewModel.isSaving && !documentViewModel.isSavePanelShowing else { return }
+        Task { @MainActor in await documentViewModel.save() }
+    }
+
+    /// 另存为：弹 NSSavePanel，成功后迁移所有权并刷新文件树/最近记录。
+    func handleSaveAs() {
+        guard !documentViewModel.isSavePanelShowing else { return }
+        let settings = SettingsModel.shared
+        documentViewModel.isSavePanelShowing = true
+        let language = settings.languagePref.resolvedLanguage
+        let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
+        let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
+
+        guard let saveURL = OpenPanelHelper.showSavePanel(
+            language: language,
+            defaultDirectory: defaultDir,
+            suggestedName: suggestedName
+        ) else {
+            documentViewModel.isSavePanelShowing = false
+            return
+        }
+
+        let oldURL = documentViewModel.currentFileURL
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.documentViewModel.saveAs(to: saveURL)
+            self.appViewModel.hasUnsavedUntitled = false
+
+            // 所有权迁移：旧 URL → 新 URL（仅当旧 URL 由本窗口持有）
+            if let oldURL, let coordinator = self.coordinator {
+                try? coordinator.migrateOwnership(from: oldURL, to: saveURL, for: self.id)
+            }
+
+            if let rootDir = self.appViewModel.rootDirectory,
+               saveURL.path.hasPrefix(rootDir.path + "/") {
+                await self.fileTreeViewModel.loadDirectory(rootDir)
+                self.fileTreeViewModel.selectedFileURL = saveURL
+            }
+
+            settings.lastOpenedFile = saveURL
+            settings.addRecentItem(url: saveURL, isDirectory: false)
+            self.documentViewModel.isSavePanelShowing = false
+        }
     }
 }
 

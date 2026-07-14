@@ -43,7 +43,9 @@ struct SidebarView: View {
 
                 // 新建文件按钮
                 Button {
-                    NotificationCenter.default.post(name: .newFile, object: nil)
+                    // Task 7：经焦点窗口命令目标路由，不广播。
+                    @FocusedValue(\.windowCommandTarget) var target
+                    target?.perform(.newFile)
                 } label: {
                     Image(systemName: "doc.badge.plus")
                         .font(.system(size: 14))
@@ -322,7 +324,9 @@ struct FileNodeRow: View {
     private var fileContextMenu: some View {
         // 重新加载：仅对当前打开且被外部修改的文件可用
         Button {
-            NotificationCenter.default.post(name: .reloadFile, object: nil)
+            // Task 7：经焦点窗口命令目标路由，不广播。
+            @FocusedValue(\.windowCommandTarget) var target
+            target?.perform(.reloadFile)
         } label: {
             Label(L10n.tr(.contextMenuReload, language: language), systemImage: "arrow.clockwise")
         }
