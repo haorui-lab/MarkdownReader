@@ -619,6 +619,7 @@ private struct FileOpenModifier: ViewModifier {
             let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
 
             if let saveURL = OpenPanelHelper.showSavePanel(
+                for: nil,
                 language: language,
                 defaultDirectory: defaultDir,
                 suggestedName: suggestedName
@@ -747,6 +748,7 @@ private struct SelectionChangeModifier: ViewModifier {
             let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
 
             if let saveURL = OpenPanelHelper.showSavePanel(
+                for: nil,
                 language: language,
                 defaultDirectory: defaultDir,
                 suggestedName: suggestedName
@@ -810,6 +812,7 @@ private struct SelectionChangeModifier: ViewModifier {
             let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
 
             if let saveURL = OpenPanelHelper.showSavePanel(
+                for: nil,
                 language: language,
                 defaultDirectory: defaultDir,
                 suggestedName: suggestedName
@@ -1045,6 +1048,7 @@ private struct WindowCloseGuard: NSViewRepresentable {
                 let suggestedName = doc.fileName.isEmpty ? "Untitled.md" : doc.fileName
 
                 if let saveURL = OpenPanelHelper.showSavePanel(
+                for: nil,
                     language: language,
                     defaultDirectory: defaultDir,
                     suggestedName: suggestedName

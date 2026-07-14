@@ -25,8 +25,10 @@ final class WindowCommandTarget {
     func perform(_ command: WindowCommand) {
         guard let session else { return }
         switch command {
-        case .newFile:
-            session.handleNewFile()
+       case .newFile:
+           session.handleNewFile()
+        case .openPanel:
+            session.openFromPanel()
         case .save:
             session.handleSave()
         case .saveAs:

@@ -27,9 +27,10 @@ struct WelcomeView: View {
                 .font(.subheadline)
                 .foregroundStyle(themeColors.fgMuted)
 
-            Button(L10n.tr(.open, language: language)) {
-                OpenPanelHelper.show(language: language)
-            }
+           Button(L10n.tr(.open, language: language)) {
+                @FocusedValue(\.windowCommandTarget) var target
+                target?.perform(.openPanel)
+           }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding(.top, 8)

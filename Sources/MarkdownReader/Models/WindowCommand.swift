@@ -8,6 +8,7 @@ import MarkdownReaderKit
 /// 同一命令只作用于当前焦点窗口，不广播给全部窗口。
 enum WindowCommand: Sendable {
     case newFile
+    case openPanel
     case save
     case saveAs
     case exportPDF

@@ -3,7 +3,7 @@ import Foundation
 /// 单个窗口会话的路由快照（纯值，供路由引擎读取）。
 struct SessionRoutingSnapshot: Equatable, Sendable {
     let id: WindowID
-    let isBlank: Bool
+    var isBlank: Bool
 }
 
 /// 路由引擎读取的当前路由状态快照。

@@ -20,10 +20,11 @@ struct MarkdownReaderCommands: Commands {
             }
             .keyboardShortcut("n", modifiers: .command)
 
-            Button(L10n.tr(.open, language: language) + "...") {
-                OpenPanelHelper.show(language: language)
-            }
-            .keyboardShortcut("o", modifiers: .command)
+           Button(L10n.tr(.open, language: language) + "...") {
+                @FocusedValue(\.windowCommandTarget) var target
+                target?.perform(.openPanel)
+           }
+           .keyboardShortcut("o", modifiers: .command)
 
             Button(L10n.tr(.titleBarSave, language: language)) {
                 @FocusedValue(\.windowCommandTarget) var target

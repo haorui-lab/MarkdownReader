@@ -29,10 +29,12 @@ struct SidebarView: View {
                 .help(L10n.tr(.titleBarToggleSidebar, language: language))
                 .padding(.leading, 8)
 
-                // 打开按钮（与菜单 Cmd+O 功能一致，直接调用避免 WindowGroup 多实例重复弹窗）
-                Button {
-                    OpenPanelHelper.show(language: language)
-                } label: {
+               // 打开按钮（与菜单 Cmd+O 功能一致，直接调用避免 WindowGroup 多实例重复弹窗）
+               Button {
+                    // Task 8：经焦点窗口命令目标路由到窗口级 OpenPanel sheet
+                    @FocusedValue(\.windowCommandTarget) var target
+                    target?.perform(.openPanel)
+               } label: {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(themeColors.fgSecondary)

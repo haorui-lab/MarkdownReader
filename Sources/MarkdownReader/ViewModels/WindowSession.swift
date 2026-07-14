@@ -82,18 +82,32 @@ final class WindowSession {
 
         // 连接 ViewModel 间依赖（原 ContentView.task 中的逻辑）
         self.fileTreeViewModel.documentViewModel = documentViewModel
-        self.commandPaletteViewModel.configure(
-            appViewModel: appViewModel,
-            fileTreeViewModel: fileTreeViewModel,
-            documentViewModel: documentViewModel,
-            settings: settings
-        )
+       self.commandPaletteViewModel.configure(
+           appViewModel: appViewModel,
+           fileTreeViewModel: fileTreeViewModel,
+           documentViewModel: documentViewModel,
+           settings: settings
+       )
+        self.commandPaletteViewModel.coordinator = coordinator
+        self.commandPaletteViewModel.windowID = id
 
         // commandTarget 弱引用本 session（init 后回填，避免 self 未完成初始化）
         self.commandTarget.session = self
     }
 
-    // MARK: - 资源打开
+   // MARK: - 资源打开
+
+    /// 通过 OpenPanel 选择文件/目录并在本窗口打开（Task 8）。
+    /// 使用窗口级 sheet，不再全局 runModal。
+    func openFromPanel() {
+        guard let window else { return }
+        let language = SettingsModel.shared.languagePref.resolvedLanguage
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard let url = await OpenPanelHelper.chooseResource(for: window, language: language) else { return }
+            coordinator?.enqueue(OpenRequest(url: url, source: .openPanel, preferredWindowID: self.id))
+        }
+    }
 
     /// 在本会话内打开文件资源。
     ///
@@ -192,11 +206,12 @@ final class WindowSession {
         let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
         let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
 
-        guard let saveURL = OpenPanelHelper.showSavePanel(
+       guard let saveURL = OpenPanelHelper.showSavePanel(
+            for: window,
             language: language,
             defaultDirectory: defaultDir,
             suggestedName: suggestedName
-        ) else {
+       ) else {
             documentViewModel.isSavePanelShowing = false
             return
         }

@@ -42,6 +42,14 @@ final class WindowCoordinator {
     /// 最后活动窗口，用于 Dock 重开前置和单窗口恢复。
     private(set) var lastActiveWindowID: WindowID?
 
+    // MARK: - 打开请求队列（Task 8）
+
+    /// 待处理的打开请求。冷启动 Coordinator 尚未 attach 窗口时，请求在此暂存。
+    private var pendingRequests: [OpenRequest] = []
+
+    /// 当前待处理请求数量。
+    var pendingRequestCount: Int { pendingRequests.count }
+
     // MARK: - 依赖
 
     private let identityService: ResourceIdentityService
@@ -273,6 +281,171 @@ final class WindowCoordinator {
     func visibleWindowIDs() -> [WindowID] {
         registeredIDs.filter { id in
             windows[id]?.value?.isVisible == true
+        }
+    }
+
+    // MARK: - 打开请求路由（Task 8）
+
+    /// 将打开请求入队。
+    /// 若 Coordinator 已 ready（至少一个 session 已注册），立即处理；否则暂存等待 drain。
+    func enqueue(_ request: OpenRequest) {
+        if hasRegisteredSession {
+            handleOpenRequest(request)
+        } else {
+            pendingRequests.append(request)
+        }
+    }
+
+    /// 排空所有待处理请求，返回实际处理的请求列表。
+    /// 由 AppDelegate 在窗口 attach 后调用。
+    /// 优先级：external 请求先于非 external（如 restore），确保冷启动双击文件不被恢复覆盖。
+    @discardableResult
+    func drainPendingRequests() -> [OpenRequest] {
+        guard !pendingRequests.isEmpty else { return [] }
+        let sorted = pendingRequests.sorted { a, b in
+            // external 优先
+            if a.source == .external && b.source != .external { return true }
+            if a.source != .external && b.source == .external { return false }
+            return false // 保持原序
+        }
+        var processed: [OpenRequest] = []
+        for request in sorted {
+            handleOpenRequest(request)
+            processed.append(request)
+        }
+        pendingRequests.removeAll()
+        return processed
+    }
+
+    /// 对一批 URL 做路由决策（不执行副作用）。
+    /// 将 URL 转为 ResourceIdentity，委托 routingEngine 批量决策。
+    /// 缺失文件产生 `.reject`，但不阻塞后续 URL。
+    func routeOpenRequest(urls: [URL], preferredWindowID: WindowID?) -> [RouteDecision] {
+        var resources: [(URL, ResourceIdentity)] = []
+        for url in urls {
+            // 判断文件/目录
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else {
+                // 缺失文件：产生 reject 占位，保持索引对齐
+                // 用一个 dummy identity 表示，routingEngine 不处理它
+                // 我们直接在结果中插入 reject
+                continue
+            }
+            let kind: ResourceIdentity.Kind = isDir.boolValue ? .directory : .file
+            do {
+                let identity = try identityService.identity(for: url, kind: kind)
+                resources.append((url, identity))
+            } catch {
+                continue
+            }
+        }
+
+       // 用 routingEngine 做批量决策
+       var state = routingSnapshot()
+        var decisions: [RouteDecision] = []
+        var resourceIndex = 0
+
+        for url in urls {
+            var isDir: ObjCBool = false
+            if !FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) {
+                decisions.append(.reject(.resourceMissing(url)))
+                continue
+            }
+            guard resourceIndex < resources.count, resources[resourceIndex].0 == url else {
+                // URL 在 resources 中没找到（如 identity 构建失败）
+                let kind: ResourceIdentity.Kind = isDir.boolValue ? .directory : .file
+                if let identity = try? identityService.identity(for: url, kind: kind) {
+                    let decision = routingEngine.decision(
+                        for: identity,
+                        preferredWindowID: preferredWindowID,
+                        state: state
+                    )
+                    decisions.append(decision)
+                    // 更新 state 以反映此资源已被占用
+                    switch decision {
+                    case .openInSession(let wid, _):
+                        state.owners[identity] = wid
+                        state.sessions[wid]?.isBlank = false
+                    case .createWindow(let wid, _):
+                        state.owners[identity] = wid
+                        state.sessions[wid] = SessionRoutingSnapshot(id: wid, isBlank: false)
+                    case .activateOwner, .reject:
+                        break
+                    }
+                } else {
+                    decisions.append(.reject(.unsupportedType(url)))
+                }
+                continue
+            }
+
+            let identity = resources[resourceIndex].1
+            resourceIndex += 1
+
+            let decision = routingEngine.decision(
+                for: identity,
+                preferredWindowID: preferredWindowID,
+                state: state
+            )
+            decisions.append(decision)
+
+            // 更新 working state，使后续 URL 的决策看到前序变更
+            switch decision {
+            case .openInSession(let wid, _):
+                state.owners[identity] = wid
+                state.sessions[wid]?.isBlank = false
+            case .createWindow(let wid, _):
+                state.owners[identity] = wid
+                state.sessions[wid] = SessionRoutingSnapshot(id: wid, isBlank: false)
+            case .activateOwner, .reject:
+                break
+            }
+        }
+
+        return decisions
+    }
+
+    /// 执行打开请求：路由 + 副作用（激活/创建窗口）。
+    /// 这是 Coordinator 对外的统一打开入口，所有打开入口都应通过 `enqueue` 间接调用此方法。
+    private func handleOpenRequest(_ request: OpenRequest) {
+        guard !request.urls.isEmpty else { return }
+
+        let decisions = routeOpenRequest(
+            urls: request.urls,
+            preferredWindowID: request.preferredWindowID
+        )
+
+        for (index, decision) in decisions.enumerated() {
+            let url = request.urls[index]
+            switch decision {
+            case .openInSession(let windowID, let resource):
+                // 复用已有窗口：在 session 中打开资源（文件或目录）
+                if let session = sessions[windowID] {
+                    session.markOpenStarted()
+                    try? claim(resource, for: windowID)
+                    Task { @MainActor in
+                        var isDir: ObjCBool = false
+                        FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+                        if isDir.boolValue {
+                            await session.openDirectory(url)
+                        } else {
+                            await session.openFile(url)
+                        }
+                        session.clearBlankOverride()
+                    }
+                }
+
+            case .createWindow(let newID, let resource):
+                // 创建新窗口：预存资源，由 WindowSceneHost 消费
+                storePending(resource: resource, for: newID)
+                openWindowAction?(id: WindowSceneID.document, value: newID)
+
+            case .activateOwner(let ownerID, _):
+                activate(windowID: ownerID)
+
+            case .reject:
+                // 文件缺失或不支持：记录日志，不阻塞后续
+                break
+            }
         }
     }
 }

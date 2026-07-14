@@ -12,7 +12,8 @@ struct MarkdownReaderApp: App {
 
     /// 应用级窗口协调器：每个窗口共享同一 Coordinator，统一路由与所有权。
     /// 由 App 持有，注入到每个 ContentView 的 WindowSession（Task 5/6）。
-    @State private var windowCoordinator = WindowCoordinator()
+    /// Task 8：AppDelegate 和 App 共享同一 Coordinator 实例。
+    @State private var windowCoordinator = AppDelegate.coordinator
 
     /// WebView 预热：App 启动时创建隐藏 WebPage，预加载 HTML 模板 + JS 库
     /// 首次打开文件时复用此 page，跳过 WKWebView 冷启动（~120ms → ~15-20ms）
@@ -71,27 +72,27 @@ struct MarkdownReaderApp: App {
                 let folders = recentItems.filter { $0.isDirectory }
 
                 // 文件列表
-                ForEach(files) { item in
-                    Button {
-                        NotificationCenter.default.post(name: .openFile, object: item.url)
-                    } label: {
-                        HStack {
-                            Image(systemName: "doc.text")
-                            Text(item.displayName)
-                        }
-                    }
-                }
+               ForEach(files) { item in
+                   Button {
+                        windowCoordinator.enqueue(OpenRequest(url: item.url, source: .openRecent))
+                   } label: {
+                       HStack {
+                           Image(systemName: "doc.text")
+                           Text(item.displayName)
+                       }
+                   }
+               }
 
-                // 分隔线（文件和目录都有时显示）
-                if !files.isEmpty && !folders.isEmpty {
-                    Divider()
-                }
+               // 分隔线（文件和目录都有时显示）
+               if !files.isEmpty && !folders.isEmpty {
+                   Divider()
+               }
 
-                // 目录列表
-                ForEach(folders) { item in
-                    Button {
-                        NotificationCenter.default.post(name: .openDirectory, object: item.url)
-                    } label: {
+               // 目录列表
+               ForEach(folders) { item in
+                   Button {
+                        windowCoordinator.enqueue(OpenRequest(url: item.url, source: .openRecent))
+                   } label: {
                         HStack {
                             Image(systemName: "folder")
                             Text(item.displayName)
@@ -119,16 +120,12 @@ struct MarkdownReaderApp: App {
         ) { $windowID in
             // defaultValue 提供 WindowID；$windowID 为非可选 Binding<WindowID>
             WindowSceneHost(windowID: windowID, coordinator: windowCoordinator)
-                // .onOpenURL 在 macOS 15+ 不触发 file-open 事件
-                // 保留作为安全网，以防未来 macOS 版本行为变化
-                .onOpenURL { url in
-                    var isDir: ObjCBool = false
-                    FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
-                    let name: Notification.Name = isDir.boolValue ? .openDirectory : .openFile
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: name, object: url)
-                    }
-                }
+               // .onOpenURL 在 macOS 15+ 不触发 file-open 事件
+               // 保留作为安全网，以防未来 macOS 版本行为变化
+               .onOpenURL { url in
+                    // Task 8：通过 Coordinator 统一路由
+                    windowCoordinator.enqueue(OpenRequest(url: url, source: .external))
+               }
                 // 热启动时路由到现有窗口，而非创建新窗口
                 .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
                 // 自动更新弹窗

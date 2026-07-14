@@ -41,13 +41,17 @@ struct WindowSceneHost: View {
     }
 
     /// 消费预存资源：把 pending resource 转成 URL 并在本会话打开。
-    @MainActor
-    private func open(resource: ResourceIdentity) async {
-        let url = resource.canonicalURL
-        // 声明所有权（路由成功后由本调用点统一负责，见 WindowSession.openFile 注释）
-        try? coordinator.claim(resource, for: windowID)
-        session.markOpenStarted()
-        await session.openFile(url)
-        session.clearBlankOverride()
-    }
+   @MainActor
+   private func open(resource: ResourceIdentity) async {
+       let url = resource.canonicalURL
+       // 声明所有权（路由成功后由本调用点统一负责，见 WindowSession.openFile 注释）
+       try? coordinator.claim(resource, for: windowID)
+       session.markOpenStarted()
+        if resource.kind == .directory {
+            await session.openDirectory(url)
+        } else {
+            await session.openFile(url)
+        }
+       session.clearBlankOverride()
+   }
 }

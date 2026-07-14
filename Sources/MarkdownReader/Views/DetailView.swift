@@ -140,9 +140,10 @@ struct DetailView: View {
                 .help(L10n.tr(.titleBarToggleSidebar, language: language))
                 .padding(.leading, 8)
 
-                Button {
-                    OpenPanelHelper.show(language: language)
-                } label: {
+               Button {
+                    @FocusedValue(\.windowCommandTarget) var target
+                    target?.perform(.openPanel)
+               } label: {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(themeColors.fgSecondary)
@@ -380,11 +381,12 @@ struct DetailView: View {
         let defaultDir = settings.lastOpenedDirectory
             ?? documentViewModel.currentFileURL?.deletingLastPathComponent()
 
-        guard let saveURL = OpenPanelHelper.showExportPDFPanel(
+       guard let saveURL = OpenPanelHelper.showExportPDFPanel(
+            for: nil,
             language: language,
-            defaultDirectory: defaultDir,
-            suggestedName: suggestedName
-        ) else { return }
+           defaultDirectory: defaultDir,
+           suggestedName: suggestedName
+       ) else { return }
 
         Task {
             await exportPDF(to: saveURL)
