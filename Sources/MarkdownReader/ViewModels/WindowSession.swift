@@ -21,9 +21,12 @@ final class WindowSession {
     let documentViewModel: DocumentViewModel
     let commandPaletteViewModel: CommandPaletteViewModel
 
-    /// 命令目标：菜单命令经 FocusedValues 路由到此（Task 7）。
-    /// 由 session 持有，弱引用自身，session 释放后自动 no-op。
-    let commandTarget: WindowCommandTarget
+   /// 命令目标：菜单命令经 FocusedValues 路由到此（Task 7）。
+   /// 由 session 持有，弱引用自身，session 释放后自动 no-op。
+   let commandTarget: WindowCommandTarget
+
+    /// 窗口级 Undo 存储（Task 10）：替代全局 UndoManagerProvider.shared。
+    let undoStore = WindowUndoStore()
 
     /// 注入的资源身份服务，避免每次调用时新建实例。
     private let identityService: ResourceIdentityService
@@ -88,8 +91,9 @@ final class WindowSession {
            documentViewModel: documentViewModel,
            settings: settings
        )
-        self.commandPaletteViewModel.coordinator = coordinator
-        self.commandPaletteViewModel.windowID = id
+       self.commandPaletteViewModel.coordinator = coordinator
+       self.commandPaletteViewModel.windowID = id
+        self.documentViewModel.undoStore = undoStore
 
         // commandTarget 弱引用本 session（init 后回填，避免 self 未完成初始化）
         self.commandTarget.session = self

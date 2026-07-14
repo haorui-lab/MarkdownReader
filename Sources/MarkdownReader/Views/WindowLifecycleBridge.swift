@@ -45,9 +45,12 @@ private struct LifecycleAnchor: NSViewRepresentable {
 
             guard let window, let session else { return }
 
-            // 1. 回填 NSWindow 给 session，并通知 Coordinator 关联窗口
-            session.window = window
-            session.coordinator?.attach(window: window, to: session.id)
+           // 1. 回填 NSWindow 给 session，并通知 Coordinator 关联窗口
+           session.window = window
+           session.coordinator?.attach(window: window, to: session.id)
+
+            // Task 10：绑定 undoStore 到 NSWindow，使 swizzled getter 无需全局状态
+            window.undoStore = session.undoStore
 
             // 2. 观察该窗口关闭，触发 dispose
             let close = NotificationCenter.default.addObserver(

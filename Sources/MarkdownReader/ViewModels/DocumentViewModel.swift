@@ -6,6 +6,9 @@ import MarkdownReaderKit
 @Observable
 final class DocumentViewModel {
 
+    /// 窗口级 Undo 存储（Task 10），由 WindowSession 注入。
+    weak var undoStore: WindowUndoStore?
+
     // MARK: - 状态
 
     /// 内容版本号，每次程序化更新（reload/load）时递增
@@ -599,7 +602,7 @@ final class DocumentViewModel {
                 // 递增版本号，通知视图层刷新
                 contentVersion += 1
                 // 清空 undo 栈：内容已被外部替换，旧 undo 历史已无意义
-                UndoManagerProvider.shared.undoManager(for: url)?.removeAllActions()
+                undoStore?.undoManager(for: url)?.removeAllActions()
             } else {
                 // 用户有修改，显示刷新按钮
                 isFileModifiedExternally = true
@@ -625,7 +628,7 @@ final class DocumentViewModel {
             isDirty = false
             outlineItems = OutlineService.parse(diskContent)
             // 清空 undo 栈：reload 意味着放弃当前修改回到磁盘状态，旧 undo 历史已无意义
-            UndoManagerProvider.shared.undoManager(for: url)?.removeAllActions()
+            undoStore?.undoManager(for: url)?.removeAllActions()
             // 递增版本号，强制通知视图层刷新
             // 即使磁盘内容与当前 content 相同，视图也需要重新渲染
             contentVersion += 1

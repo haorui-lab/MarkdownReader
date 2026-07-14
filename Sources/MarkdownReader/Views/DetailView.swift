@@ -33,6 +33,7 @@ struct DetailView: View {
     let documentViewModel: DocumentViewModel
     let fileTreeViewModel: FileTreeViewModel
     let settings: SettingsModel
+    var undoStore: WindowUndoStore?
     @Environment(\.language) private var language
     @Environment(\.themeColors) private var themeColors
 
@@ -581,7 +582,8 @@ struct DetailView: View {
                 onCursorLineNumberChanged: { lineNumber in
                     documentViewModel.cursorLineNumber = lineNumber
                 },
-                contentVersion: documentViewModel.contentVersion
+                contentVersion: documentViewModel.contentVersion,
+                undoStore: undoStore
             )
             .opacity(documentViewModel.displayMode == .raw ? 1 : 0)
             .allowsHitTesting(documentViewModel.displayMode == .raw)
