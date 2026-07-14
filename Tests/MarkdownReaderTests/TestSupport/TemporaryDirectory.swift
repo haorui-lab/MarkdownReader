@@ -3,10 +3,10 @@ import XCTest
 
 /// 提供可复用临时目录的测试基类。
 /// setUp 创建唯一临时目录，tearDown 递归删除，避免测试间互相污染。
-final class TemporaryDirectoryTestCase: XCTestCase {
+class TemporaryDirectoryTestCase: XCTestCase {
 
     /// 当前测试用例专属的临时目录 URL
-    private(set) var temporaryDirectory: URL!
+    var temporaryDirectory: URL!
 
     override func setUp() {
         super.setUp()
@@ -29,6 +29,14 @@ final class TemporaryDirectoryTestCase: XCTestCase {
     @discardableResult
     func makeFile(named name: String, content: String = "") throws -> URL {
         let url = temporaryDirectory.appendingPathComponent(name)
+        try content.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    /// 在指定目录内创建一个文件，返回其 URL。
+    @discardableResult
+    func makeFile(named name: String, in directory: URL, content: String = "") throws -> URL {
+        let url = directory.appendingPathComponent(name)
         try content.write(to: url, atomically: true, encoding: .utf8)
         return url
     }
