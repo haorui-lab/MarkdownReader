@@ -243,15 +243,16 @@ final class WindowCoordinator {
     func activate(windowID: WindowID) {
         lastActiveWindowID = windowID
         guard let window = windows[windowID]?.value else {
-            // 窗口引用失效：通过 openWindow 重建/前置
+            // 窗口引用失效：若已安装 OpenWindowAction 则通过它重建/前置。
             openWindowAction?(id: WindowSceneID.document, value: windowID)
-            NSApp.activate(ignoringOtherApps: true)
+            // 测试/headless 环境下 NSApp 可能为 nil，安全激活而非强制解包。
+            NSApp?.activate(ignoringOtherApps: true)
             return
         }
         window.deminiaturize(nil)
         window.setIsVisible(true)
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp?.activate(ignoringOtherApps: true)
     }
 
     /// 记录最后活动窗口。

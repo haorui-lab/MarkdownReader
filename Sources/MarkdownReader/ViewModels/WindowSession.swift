@@ -29,11 +29,36 @@ final class WindowSession {
 
     // MARK: - 窗口级状态
 
+    /// 显式空白标记（发现 3：消除派生 isBlank 的竞态窗口）。
+    ///
+    /// `nil` 表示沿用派生判定（向后兼容）；一旦 open 开始即置为 `false`，
+    /// open 失败恢复为 `true`。路由读取 `isBlank` 时优先用显式标记，
+    /// 避免 ViewModel 异步刷新过程中三者短暂不一致被路由误判为 blank。
+    private var explicitBlankOverride: Bool?
+
     /// 是否为空白窗口（未打开文件/目录、无 Untitled 待保存文档）。
     var isBlank: Bool {
-        documentViewModel.currentFileURL == nil
+        if let explicit = explicitBlankOverride {
+            return explicit
+        }
+        return documentViewModel.currentFileURL == nil
             && appViewModel.rootDirectory == nil
             && !documentViewModel.isUntitled
+    }
+
+    /// open 操作开始时调用：立即将本窗口标记为非空白，阻止路由在异步加载期间复用它。
+    func markOpenStarted() {
+        explicitBlankOverride = false
+    }
+
+    /// open 操作失败时调用：恢复空白标记，使该窗口仍可被后续打开复用。
+    func markOpenFailed() {
+        explicitBlankOverride = true
+    }
+
+    /// 清除显式标记，回到派生判定（open 成功后 ViewModel 状态已稳定）。
+    func clearBlankOverride() {
+        explicitBlankOverride = nil
     }
 
     init(
