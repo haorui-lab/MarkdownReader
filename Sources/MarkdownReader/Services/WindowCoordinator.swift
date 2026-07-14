@@ -101,6 +101,15 @@ final class WindowCoordinator {
         }
     }
 
+    /// 注册会话并关联其 NSWindow（Task 6 生命周期桥接入口）。
+    /// 由 WindowSceneHost 在窗口挂载时调用；session.window 通过 bridge 回填。
+    func register(session: WindowSession, window: NSWindow?) {
+        register(session: session)
+        if let window {
+            attach(window: window, to: session.id)
+        }
+    }
+
     /// 注册会话的轻量重载（测试用，不依赖真实 session 对象，仅维护路由快照）。
     func registerSession(id: WindowID, isBlank: Bool) {
         if ownedResources[id] == nil { ownedResources[id] = [] }

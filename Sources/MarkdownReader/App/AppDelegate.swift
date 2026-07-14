@@ -122,24 +122,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSWindow.allowsAutomaticWindowTabbing = false
 
-        // 单窗口守卫：监听窗口成为 key 与应用激活，关闭多余的非 panel 窗口
-        // WindowGroup 默认允许多窗口，macOS 26 在文件打开事件时可能创建隐藏的第二窗口，
-        // 导致第二个 ContentView 实例独立监听保存通知、各自弹框（无限弹框根因）。
-        // 此守卫从源头确保任意时刻只有一个 ContentView 窗口存活。
-        // 注意：didBecomeKey 仅在窗口「成为」key 时触发；若新窗口创建时主窗口已是 key，
-        // 不会再次触发，因此额外监听 didBecomeActive 以捕获后出现的隐藏多余窗口。
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(enforceSingleWindow),
-            name: NSWindow.didBecomeKeyNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(enforceSingleWindow),
-            name: NSApplication.didBecomeActiveNotification,
-            object: nil
-        )
+        // 单窗口守卫已随 Task 6 data-driven WindowGroup 移除：
+        // 多窗口现在是受支持的行为，不再强制关闭多余窗口。
+        //（原守卫：监听 didBecomeKey/didBecomeActive 关闭多余非 panel 窗口，
+        //  为修复 macOS 26 隐藏第二窗口导致重复弹保存框的根因。）
 
         // 在任何 SwiftUI 视图创建前设置 appearance，避免 NSTextView textColor 被 AppKit 覆盖
         // ContentView.task 中的 applyAppearance() 仍保留作为兜底
@@ -198,32 +184,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Dock 点击处理
-
-    /// 单窗口守卫：关闭多余的主窗口，仅保留一个。
-    ///
-    /// 修复「无限弹出保存框」根因：macOS 26 WindowGroup 在文件打开事件时可能创建隐藏的第二窗口，
-    /// 第二个 ContentView 实例独立监听保存通知、各自弹框。此守卫确保任意时刻只有一个主窗口存活。
-    ///
-    /// 注意：SwiftUI 窗口的 accessibilityIdentifier() 为空字符串而非 nil，不能用 nil 判断；
-    /// 这里改用「非 panel + 可缩放」识别主窗口（关于面板无 .resizable，会被排除），
-    /// 且不要求 isVisible —— 隐藏的多余窗口同样需要关闭。
-    /// 优先保留 key 窗口；若无 key 窗口则保留第一个。
-    @objc private func enforceSingleWindow(_ notification: Notification? = nil) {
-        // 由 didBecomeKey 触发时，若成为 key 的是 panel（保存/打开面板），跳过
-        if let window = notification?.object as? NSWindow, window is NSPanel { return }
-
-        let mainWindows = NSApp.windows.filter {
-            !($0 is NSPanel) && $0.styleMask.contains(.resizable)
-        }
-        guard mainWindows.count > 1 else { return }
-
-        // 优先保留 key 窗口，否则保留第一个
-        let keeper = mainWindows.first(where: { $0.isKeyWindow }) ?? mainWindows[0]
-        for extraWindow in mainWindows where extraWindow !== keeper {
-            logger.info("Single-window guard: closing extra window '\(extraWindow.title)' visible=\(extraWindow.isVisible) key=\(extraWindow.isKeyWindow)")
-            extraWindow.close()
-        }
-    }
 
     /// 用户点击 Dock 图标时调用
     /// 当所有窗口都关闭后点击 Dock 图标，激活隐藏窗口

@@ -109,14 +109,16 @@ struct MarkdownReaderApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
-            // 单窗口过渡期：主窗口仍由默认 WindowGroup 创建。
-            // 此处创建一次性 session 注入 ContentView；Task 6 切换为 data-driven
-            // WindowGroup(for: WindowID.self) 后由 WindowSceneHost 统一创建 session。
-            ContentView(session: WindowSession(
-                id: WindowID(),
-                coordinator: windowCoordinator
-            ))
+        // data-driven WindowGroup（Task 6）：每个窗口绑定一个 WindowID，
+        // 由 WindowSceneHost 创建对应 WindowSession 并注入 ContentView。
+        // 同一 WindowID 的窗口会被 SwiftUI 复用/前置而非重建（见 WindowID 注释）。
+        WindowGroup(
+            "Markdown Reader",
+            id: WindowSceneID.document,
+            for: WindowID.self
+        ) { $windowID in
+            // defaultValue 提供 WindowID；$windowID 为非可选 Binding<WindowID>
+            WindowSceneHost(windowID: windowID, coordinator: windowCoordinator)
                 // .onOpenURL 在 macOS 15+ 不触发 file-open 事件
                 // 保留作为安全网，以防未来 macOS 版本行为变化
                 .onOpenURL { url in
@@ -143,7 +145,10 @@ struct MarkdownReaderApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: .checkForUpdates)) { _ in
                     updateViewModel.checkForUpdatesManually()
                 }
+        } defaultValue: {
+            WindowID()
         }
+        .restorationBehavior(.disabled)
         // .handlesExternalEvents(matching:) scene modifier 已移除
         // 冷启动时 ContentView.task 通过 UserDefaults 读取 AppDelegate 写入的文件路径，
         // 无需 SwiftUI 为外部事件创建额外窗口，避免出现双窗口问题
