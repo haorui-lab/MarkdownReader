@@ -3,6 +3,8 @@ import XCTest
 
 /// 提供可复用临时目录的测试基类。
 /// setUp 创建唯一临时目录，tearDown 递归删除，避免测试间互相污染。
+/// 标注 @MainActor：子类测试 @MainActor 类型（WindowCoordinator 等），同步隔离避免 actor 跳转。
+@MainActor
 class TemporaryDirectoryTestCase: XCTestCase {
 
     /// 当前测试用例专属的临时目录 URL
@@ -28,7 +30,7 @@ class TemporaryDirectoryTestCase: XCTestCase {
     /// 在临时目录内创建一个文件，返回其 URL。content 默认为空字符串。
     @discardableResult
     func makeFile(named name: String, content: String = "") throws -> URL {
-        let url = temporaryDirectory.appendingPathComponent(name)
+        let url = temporaryDirectory!.appendingPathComponent(name)
         try content.write(to: url, atomically: true, encoding: .utf8)
         return url
     }
@@ -44,8 +46,9 @@ class TemporaryDirectoryTestCase: XCTestCase {
     /// 在临时目录内创建子目录，返回其 URL。
     @discardableResult
     func makeDirectory(named name: String) throws -> URL {
-        let url = temporaryDirectory.appendingPathComponent(name)
+        let url = temporaryDirectory!.appendingPathComponent(name)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
 }
+
