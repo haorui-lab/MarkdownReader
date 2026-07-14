@@ -202,3 +202,41 @@ LocalizationService
 - **全屏模式适配**：`.hiddenTitleBar` 模式下全屏时需处理红绿灯行为（红绿灯区域宽度从 76px 变为 32px）和 TitleBar 的自动隐藏/显示
 - **Git Process 依赖**：GitService 依赖 /usr/bin/git，Xcode 命令行工具需预装
 - **大纲 scroll-to-line**：OutlineItem 已存储 lineNumber，但 scroll-to-line 功能尚未实现
+
+## 8. 多窗口架构（v2.2.0）
+
+### 8.1 核心组件
+
+- **WindowSession**：窗口级业务边界。每个窗口拥有独立的 AppViewModel、DocumentViewModel、FileTreeViewModel、CommandPaletteViewModel、WindowUndoStore 和 WindowCommandTarget。
+- **WindowCoordinator**：应用级协调器。维护窗口注册表、资源所有权映射（ResourceIdentity → WindowID），将路由判断委托给 WindowRoutingEngine。
+- **WindowRoutingEngine**：纯逻辑路由引擎。决策顺序：owner → preferred blank → any blank → create。
+- **ResourceIdentityService**：基于路径标准化的资源身份规范化。处理符号链接解析和大小写敏感卷归一。
+- **ApplicationTerminationCoordinator**：应用级终止协调器。串行处理所有脏 Untitled session 的关闭确认。
+- **AppStartupCoordinator**：幂等启动服务。WebView 预热 + 更新检查只执行一次。启动优先级：external > restore > blank。
+- **WebViewWarmupService**：幂等 WebView 预热。状态机 `.idle → .warming → .ready`。
+
+### 8.2 引用关系
+
+```
+App → WindowCoordinator（强持有）
+WindowCoordinator → WindowSession（注册期间强持有，注销时释放）
+WindowSession → WindowCoordinator（弱引用，避免环）
+WindowSession → NSWindow（弱引用，由 WindowLifecycleBridge 回填）
+NSWindow → WindowUndoStore（ObjC associated object，RETAIN_NONATOMIC）
+```
+
+### 8.3 命令路由
+
+菜单命令经 SwiftUI FocusedValues 路由到焦点窗口的 WindowCommandTarget。每个 WindowSession 在 WindowSceneHost 中通过 `.focusedSceneValue(\.windowCommandTarget)` 发布自己的 target。应用级命令（About、检查更新、清除最近记录）保留应用服务调用。
+
+### 8.4 打开路由
+
+所有打开入口构造 `OpenRequest` 并通过 `WindowCoordinator.enqueue` 提交。冷启动时 Coordinator 尚未 ready，请求在内存队列暂存；attach 后 drain，external 请求优先。
+
+### 8.5 所有权约束
+
+同一文件只允许一个所有者窗口。路由引擎返回 `.activateOwner` 时，目录窗口不改选中项、不加载文档，仅激活所有者窗口。文件行显示「已在另一窗口打开」标记。
+
+### 8.6 Undo 隔离
+
+每窗口独立 WindowUndoStore，按文件 URL 管理 UndoManager。swizzled `NSWindow.undoManager` getter 通过 ObjC associated object 读取 `self.undoStore?.activeUndoManager`，无需全局可变状态。

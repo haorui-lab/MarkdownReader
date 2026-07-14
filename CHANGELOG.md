@@ -7,6 +7,23 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **Word 式多窗口**：从单窗口架构升级为多窗口，每个窗口拥有独立的文件、目录、编辑、查找、大纲和 Undo 状态
+  - 新增 `WindowSession`：窗口级业务边界，持有独立的 ViewModel 和 UndoStore
+  - 新增 `WindowCoordinator`：应用级窗口协调器，管理资源所有权、路由决策和窗口生命周期
+  - 新增 `WindowRoutingEngine`：纯逻辑路由引擎（owner → preferred blank → any blank → create）
+  - 新增 `ResourceIdentityService`：基于路径标准化的资源身份规范化（符号链接、大小写敏感卷）
+  - 同一文件只允许一个所有者窗口；再次打开时激活已有窗口，不创建重复实例
+  - 目录窗口点击已被另一窗口持有的文件时，目录窗口选择不变，激活所有者窗口
+  - 窗口级菜单命令经 FocusedValues 路由到焦点窗口，不广播
+  - 统一所有打开入口（Finder、Open Recent、OpenPanel、命令面板、拖拽、链接点击）经 Coordinator 路由
+  - 窗口级 Undo 隔离：每窗口独立 UndoStore，替代全局 UndoManagerProvider
+  - 窗口级关闭协调：ApplicationTerminationCoordinator 串行处理脏 Untitled session
+  - 应用级服务幂等执行：WebViewWarmupService、AppStartupCoordinator
+  - 删除全局 `nonisolated(unsafe)` 可变状态（`_activePerFileUndoManager`、`UndoManagerProvider.shared`、`isPanelShowing`）
+  - 删除单窗口守卫、`pendingOpenFilePath` UserDefaults、0.5s 启动延迟
+
 ## [2.1.11] - 2026-07-08
 
 ### 修复

@@ -71,31 +71,9 @@ struct ContentView: View {
                 // ViewModel 间依赖连接已由 WindowSession.init 完成，不在此重复连接。
                 applyAppearance(settings.appearanceMode)
 
-                // 后备机制：清理 UserDefaults 中残留的待打开路径
-                // 正常流程：AppDelegate.applicationDidFinishLaunching 主动发通知打开文件
-                // 此处仅在 AppDelegate 尚未处理（如极早期视图挂载时）才兜底
-                if let filePath = UserDefaults.standard.string(forKey: "pendingOpenFilePath") {
-                    UserDefaults.standard.removeObject(forKey: "pendingOpenFilePath")
-                    UserDefaults.standard.removeObject(forKey: "pendingOpenDirectoryPath")
-                    let url = URL(fileURLWithPath: filePath)
-                    // 幂等保护：如果 AppDelegate 已通过通知打开，FileOpenModifier 会跳过
-                    appViewModel.openSingleFile(url)
-                    fileTreeViewModel.selectedFileURL = url
-                    session.recordLastOpened(file: url, directory: nil)
-                    settings.addRecentItem(url: url, isDirectory: false)
-                    await documentViewModel.loadFile(at: url)
-                } else if let dirPath = UserDefaults.standard.string(forKey: "pendingOpenDirectoryPath") {
-                    UserDefaults.standard.removeObject(forKey: "pendingOpenDirectoryPath")
-                    UserDefaults.standard.removeObject(forKey: "pendingOpenFilePath")
-                    let url = URL(fileURLWithPath: dirPath)
-                    appViewModel.openDirectory(url)
-                    session.recordLastOpened(file: nil, directory: url)
-                    settings.addRecentItem(url: url, isDirectory: true)
-                    await fileTreeViewModel.loadDirectory(url)
-                }
-                // 不在此处调用 restoreLastLocation()
-                // 冷启动时，applicationDidFinishLaunching 通过 .restoreLastLocation 通知处理
-                // 这样可以确保通知在视图完全挂载后才发送，避免时序问题
+                // Task 14：已删除 pendingOpenFilePath/pendingOpenDirectoryPath UserDefaults 后备。
+                // 所有打开入口经 WindowCoordinator.enqueue(OpenRequest) 统一路由（Task 8）。
+                // restoreLastLocation 由 AppDelegate 经 AppStartupCoordinator 裁决后触发。
             }
             .onReceive(NotificationCenter.default.publisher(for: .resetToWelcome)) { _ in
                 resetToWelcome()
@@ -449,15 +427,6 @@ private struct FullScreenStateModifier: ViewModifier {
 
 // MARK: - 文件打开通知
 
-/// 单窗口判定：仅当存在多个主窗口时，才需要 key 窗口守卫。
-/// 这样在正常的单窗口模式下，保存 / 新建永远不会被静默跳过（无回归风险）；
-/// 仅在 macOS 26 误创隐藏第二窗口时，才限定由 key 窗口处理，避免重复弹框。
-private enum SingleWindow {
-    @MainActor static var hasMultipleMainWindows: Bool {
-        NSApp.windows.filter { !($0 is NSPanel) && $0.styleMask.contains(.resizable) }.count > 1
-    }
-}
-
 private struct FileOpenModifier: ViewModifier {
     let appViewModel: AppViewModel
     let documentViewModel: DocumentViewModel
@@ -466,83 +435,12 @@ private struct FileOpenModifier: ViewModifier {
     /// Task 13：用于判断本窗口是否为最后活动窗口，限制 lastOpened 写入。
     let session: WindowSession
 
-    /// 确保主窗口可见。
-    /// 关闭窗口时 SwiftUI 仅隐藏而非销毁窗口，ContentView 仍可接收通知。
-    /// 若窗口隐藏时收到 .openFile/.openDirectory（如通过「打开最近使用」菜单），
-    /// 需先激活窗口，否则文件虽加载到 ViewModel 但用户看不到。
-    private func ensureWindowVisible() {
-        let hasVisible = NSApp.windows.contains {
-            $0.isVisible && !($0 is NSPanel) && $0.styleMask.contains(.resizable)
-        }
-        guard !hasVisible else { return }
-        for window in NSApp.windows
-            where !(window is NSPanel) && window.canBecomeKey && window.styleMask.contains(.resizable) {
-            window.setIsVisible(true)
-            window.makeKeyAndOrderFront(nil)
-            break
-        }
-        NSApp.activate(ignoringOtherApps: true)
-    }
+    /// Task 14：ensureWindowVisible 已移除。
+    /// 窗口激活由 WindowCoordinator.activate(windowID:) 统一处理，
+    /// 不再遍历 NSApp.windows 推断目标窗口。
 
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: .openDirectory)) { notification in
-                guard let url = notification.object as? URL else { return }
-                ensureWindowVisible()
-                // 幂等保护：如果已经在显示此目录，跳过
-                if appViewModel.rootDirectory == url { return }
-                if documentViewModel.isUntitled && documentViewModel.isDirty {
-                    handleUnsavedChangesBeforeAction { proceed in
-                        guard proceed else { return }
-                        appViewModel.openDirectory(url)
-                        session.recordLastOpened(file: nil, directory: url)
-                        settings.addRecentItem(url: url, isDirectory: true)
-                    }
-                } else {
-                    appViewModel.openDirectory(url)
-                    session.recordLastOpened(file: nil, directory: url)
-                    settings.addRecentItem(url: url, isDirectory: true)
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .openFile)) { notification in
-                guard let url = notification.object as? URL else { return }
-                ensureWindowVisible()
-                // 幂等保护：如果已经在显示此文件，跳过（防止 application(_:open:) 和 .onOpenURL 同时触发导致重复打开）
-                // 但如果文件被外部修改，触发带确认的 reload 流程（避免有未保存编辑时直接丢弃）
-                if documentViewModel.currentFileURL == url {
-                    if documentViewModel.isFileModifiedExternally {
-                        // Task 7：经焦点窗口命令目标触发 reload（含脏文件确认弹窗），
-                        // 不再 post .reloadFile 通知。
-                        @FocusedValue(\.windowCommandTarget) var target
-                        target?.perform(.reloadFile)
-                    }
-                    return
-                }
-                if documentViewModel.isUntitled && documentViewModel.isDirty {
-                    handleUnsavedChangesBeforeAction { proceed in
-                        guard proceed else { return }
-                        appViewModel.openSingleFile(url)
-                        fileTreeViewModel.selectedFileURL = url
-                        session.recordLastOpened(file: url, directory: nil)
-                        settings.addRecentItem(url: url, isDirectory: false)
-                        // 显式触发加载：窗口关闭后 selectedFileURL 可能与旧值相同，
-                        // 仅靠 onChange(of: selectedFileURL) 不一定触发，需直接加载兜底。
-                        // loadFile 内部有幂等判断，不会重复加载。
-                        Task {
-                            await documentViewModel.loadFile(at: url)
-                        }
-                    }
-                } else {
-                    appViewModel.openSingleFile(url)
-                    fileTreeViewModel.selectedFileURL = url
-                    session.recordLastOpened(file: url, directory: nil)
-                    settings.addRecentItem(url: url, isDirectory: false)
-                    // 显式触发加载：同上，避免依赖 onChange 兜底。
-                    Task {
-                        await documentViewModel.loadFile(at: url)
-                    }
-                }
-            }
             .onReceive(NotificationCenter.default.publisher(for: .openLinkedMarkdownFile)) { notification in
                 guard let url = notification.object as? URL else { return }
                 handleLinkedMarkdownFileOpen(url.standardizedFileURL)
