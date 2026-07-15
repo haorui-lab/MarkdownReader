@@ -12,7 +12,6 @@
 - `ContentView.handleFileSwitchWithUnsavedChanges` 与 `handleDeletedFileWithUnsavedChanges` 仍用 `NSAlert.runModal()`（应用级 modal，多窗口下阻塞所有窗口）；Save/SaveAs/ExportPDF 面板已改窗口级 sheet，但未保存确认 alert 尚未统一，待改为 `beginSheetModal(for: window)`
 - `FileTreeViewModel.moveItem` 的 NSOpenPanel 仍用 `runModal()`，多窗口下阻塞，待改窗口级 sheet
 - `handleFileSwitchWithUnsavedChanges` 的 save 分支 `saveAs` 成功后直接 `loadFile(at: newURL)` 未声明 newURL 所有权（pre-existing，若 newURL 被其他窗口持有会双加载）；待复用 `WindowSession.requestFileSelection` 走所有权事务
-- 渲染页内 Markdown 链接点击仍通过 NotificationCenter 广播，多窗口下可能影响非焦点窗口（P2，后续修复）
 - 菜单 nil target 禁用状态、PDF sheet 附着等需真实焦点环境的验证尚未覆盖（SwiftUI Commands 焦点读取无法用普通 XCTest 可靠覆盖），待补最小 UI harness
 - 双窗口/多目录/最小化/全屏/关闭最后窗口重开等人工回归矩阵未执行，需 GUI 环境验证
 
