@@ -220,6 +220,11 @@ final class AppViewModel {
     }
 
     /// 打开目录
+    ///
+    /// 目录模式下目录树是主要操作入口，因此无论此前 Sidebar 是否隐藏，
+    /// 打开目录成功后必须保证 Sidebar 可见。
+    /// - 已显示 Sidebar：保留用户调整过的宽度，不重置；
+    /// - 从隐藏切到显示：若宽度无效（被收起操作压到阈值以下），恢复默认宽度。
     func openDirectory(_ url: URL) {
         rootDirectory = url
         isSingleFileMode = false
@@ -229,7 +234,9 @@ final class AppViewModel {
         if !isSidebarVisible {
             withAnimation(.spring(duration: 0.25)) {
                 isSidebarVisible = true
-                sidebarWidth = Self.defaultSidebarWidth
+                if sidebarWidth < Self.minSidebarWidth {
+                    sidebarWidth = Self.defaultSidebarWidth
+                }
             }
         }
     }

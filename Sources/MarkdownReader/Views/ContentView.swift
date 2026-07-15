@@ -236,6 +236,9 @@ struct ContentView: View {
             return
         }
         if let dir = settings.lastOpenedDirectory {
+            // 经 AppViewModel.openDirectory 设置目录模式 + 展开 Sidebar；
+            // 目录树加载由 DirectoryChangeModifier 监听 rootDirectory 变化统一触发，
+            // 不在此重复调用 loadDirectory，避免与其它入口产生双重加载。
             appViewModel.openDirectory(dir)
             settings.addRecentItem(url: dir, isDirectory: true)
         } else if let file = settings.lastOpenedFile {

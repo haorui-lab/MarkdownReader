@@ -7,21 +7,12 @@
 
 ## [Unreleased]
 
-### 修复
-
-- **多窗口回归修复**：修复多窗口改造后窗口级命令路由和目录内导航的系统性回归
-  - 命令路由：`MarkdownReaderCommands` 改为结构体级声明 `@FocusedValue`，禁止按钮 closure 内临时创建导致 target 为 nil 静默 no-op；无焦点 target 时菜单禁用
-  - 视图层控件：Sidebar/Welcome/TitleBar/右键菜单直接调用注入的本窗口 `WindowCommandTarget`，不再通过 FocusedValue 反查；DetailView/WebViewMarkdownView 不再发布覆盖式 `focusedSceneValue`
-  - 目录内导航：目录树/命令面板选择根目录内文件不再进入通用外部路由（避免误建窗口），改为目录窗口专用事务——声明目标所有权、释放旧文件所有权（保留根目录）、切换选中项并加载
-  - 新建/保存流程：脏 Untitled 新建走完整「保存/不保存/取消」三分支；Cmd+S 对 Untitled 进入本窗口 Save As；Save/SaveAs/PDF 面板改为窗口级 sheet；新增 Save As 菜单入口
-  - 连带问题：移除 Markdown 内链全局广播改为 WebView closure 回传所属 session；全屏通知按所属 NSWindow 过滤；didBecomeKey 更新 MRU/lastActiveWindowID；实现 `File > New Window` 与 `Cmd+Shift+N`；补全 Window 菜单；清理已失去调用方的窗口级 `Notification.Name`
-- 新增回归测试：目录窗口导航事务、新建/保存流程、命令分发隔离、外部去重、内链来源窗口、全屏隔离、MRU、连续创建窗口（共 17 个测试）
-
-### 已知遗留（后续处理，不阻塞本次回归修复）
+### 已知遗留（后续处理）
 
 - `ContentView.handleFileSwitchWithUnsavedChanges` 与 `handleDeletedFileWithUnsavedChanges` 仍用 `NSAlert.runModal()`（应用级 modal，多窗口下阻塞所有窗口）；Save/SaveAs/ExportPDF 面板已改窗口级 sheet，但未保存确认 alert 尚未统一，待改为 `beginSheetModal(for: window)`
 - `FileTreeViewModel.moveItem` 的 NSOpenPanel 仍用 `runModal()`，多窗口下阻塞，待改窗口级 sheet
 - `handleFileSwitchWithUnsavedChanges` 的 save 分支 `saveAs` 成功后直接 `loadFile(at: newURL)` 未声明 newURL 所有权（pre-existing，若 newURL 被其他窗口持有会双加载）；待复用 `WindowSession.requestFileSelection` 走所有权事务
+- 渲染页内 Markdown 链接点击仍通过 NotificationCenter 广播，多窗口下可能影响非焦点窗口（P2，后续修复）
 - 菜单 nil target 禁用状态、PDF sheet 附着等需真实焦点环境的验证尚未覆盖（SwiftUI Commands 焦点读取无法用普通 XCTest 可靠覆盖），待补最小 UI harness
 - 双窗口/多目录/最小化/全屏/关闭最后窗口重开等人工回归矩阵未执行，需 GUI 环境验证
 
@@ -43,6 +34,17 @@
   - 应用级服务幂等执行：WebViewWarmupService、AppStartupCoordinator
   - 删除全局 `nonisolated(unsafe)` 可变状态（`_activePerFileUndoManager`、`UndoManagerProvider.shared`、`isPanelShowing`）
   - 删除单窗口守卫、`pendingOpenFilePath` UserDefaults、0.5s 启动延迟
+
+### 修复
+
+- **多窗口回归修复**：修复多窗口改造后窗口级命令路由和目录内导航的系统性回归
+  - 命令路由：`MarkdownReaderCommands` 改为结构体级声明 `@FocusedValue`，禁止按钮 closure 内临时创建导致 target 为 nil 静默 no-op；无焦点 target 时菜单禁用
+  - 视图层控件：Sidebar/Welcome/TitleBar/右键菜单直接调用注入的本窗口 `WindowCommandTarget`，不再通过 FocusedValue 反查；DetailView/WebViewMarkdownView 不再发布覆盖式 `focusedSceneValue`
+  - 目录内导航：目录树/命令面板选择根目录内文件不再进入通用外部路由（避免误建窗口），改为目录窗口专用事务——声明目标所有权、释放旧文件所有权（保留根目录）、切换选中项并加载
+  - 新建/保存流程：脏 Untitled 新建走完整「保存/不保存/取消」三分支；Cmd+S 对 Untitled 进入本窗口 Save As；Save/SaveAs/PDF 面板改为窗口级 sheet；新增 Save As 菜单入口
+  - 连带问题：移除 Markdown 内链全局广播改为 WebView closure 回传所属 session；全屏通知按所属 NSWindow 过滤；didBecomeKey 更新 MRU/lastActiveWindowID；实现 `File > New Window` 与 `Cmd+Shift+N`；补全 Window 菜单；清理已失去调用方的窗口级 `Notification.Name`
+- **打开目录强制展开 Sidebar 并保留有效宽度**：目录模式下目录树是主要操作入口，打开目录后必须保证 Sidebar 可见；从隐藏切到显示时仅在宽度低于阈值时恢复默认宽度，不再重置用户调整过的有效宽度
+- 新增回归测试：目录窗口导航事务、新建/保存流程、命令分发隔离、外部去重、内链来源窗口、全屏隔离、MRU、连续创建窗口、打开目录展开 Sidebar（共 25 个测试）
 
 ## [2.1.11] - 2026-07-08
 
