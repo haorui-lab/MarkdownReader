@@ -3,10 +3,20 @@ import MarkdownReaderKit
 
 /// 主视图，管理自定义 HStack 两列布局
 /// 设置模式下左侧显示设置菜单，右侧显示设置内容
+///
+/// 每个窗口通过 `WindowSession` 注入窗口级业务对象（Task 5 Step 4）。
+/// `ContentView` 不再自行创建 ViewModel，而是从 session 派生，保证
+/// 多窗口下各窗口拥有独立的文件、目录、编辑、命令面板状态。
 struct ContentView: View {
-    @State private var appViewModel = AppViewModel()
-    @State private var fileTreeViewModel = FileTreeViewModel()
-    @State private var documentViewModel = DocumentViewModel()
+    /// 本窗口的会话边界（由 WindowSceneHost/WindowGroup 注入）。
+    let session: WindowSession
+
+    /// 从 session 派生的窗口级 ViewModel，保持原有调用点不变。
+    private var appViewModel: AppViewModel { session.appViewModel }
+    private var fileTreeViewModel: FileTreeViewModel { session.fileTreeViewModel }
+    private var documentViewModel: DocumentViewModel { session.documentViewModel }
+    private var commandPaletteViewModel: CommandPaletteViewModel { session.commandPaletteViewModel }
+
     @State private var settings = SettingsModel.shared
     @Environment(\.language) private var language
     @Environment(\.colorScheme) private var colorScheme
@@ -16,8 +26,6 @@ struct ContentView: View {
     @State private var themeColors: ThemeColors = ThemeColors.from(
         SettingsModel.shared.resolvedTheme
     )
-    /// 命令面板 ViewModel
-    @State private var commandPaletteViewModel = CommandPaletteViewModel()
 
     var body: some View {
         mainLayout
@@ -28,16 +36,16 @@ struct ContentView: View {
             .environment(\.language, settings.languagePref.resolvedLanguage)
             .applyThemeColors(themeColors)
             .tint(themeColors.accent)
-            .modifier(FullScreenStateModifier(appViewModel: appViewModel))
-            .modifier(KeyboardShortcutModifier(
-                appViewModel: appViewModel,
-                documentViewModel: documentViewModel
-            ))
+            .modifier(FullScreenStateModifier(session: session))
+            // 回归修复：toggleSidebar / switchDisplayMode / 内链打开等窗口级命令已迁移到
+            // FocusedValues（WindowCommandTarget）或所属 session closure，不再经通知广播。
+            // FileOpenModifier 已无广播监听，保留以最小化改动。
             .modifier(FileOpenModifier(
                 appViewModel: appViewModel,
                 documentViewModel: documentViewModel,
                 fileTreeViewModel: fileTreeViewModel,
-                settings: settings
+                settings: settings,
+                session: session
             ))
             .modifier(DirectoryChangeModifier(
                 appViewModel: appViewModel,
@@ -48,49 +56,25 @@ struct ContentView: View {
                 appViewModel: appViewModel,
                 documentViewModel: documentViewModel,
                 fileTreeViewModel: fileTreeViewModel,
-                settings: settings
+                settings: settings,
+                session: session
             ))
             .modifier(SettingsChangeModifier(
                 appViewModel: appViewModel,
                 fileTreeViewModel: fileTreeViewModel,
                 settings: settings
             ))
-            .modifier(ToggleSettingsModifier(appViewModel: appViewModel))
+            .modifier(ToggleSettingsModifier())
             .background(TrafficLightHider(bgColor: themeColors.bgSubtle))
-            .background(WindowCloseGuard(documentViewModel: documentViewModel, settings: settings))
-            .background(KeyWindowTracker(documentViewModel: documentViewModel))
+            .background(WindowCloseGuard(session: session))
+            .background(KeyWindowTracker(documentViewModel: documentViewModel, session: session))
             .task {
-                // 连接 FileTreeViewModel 与 DocumentViewModel
-                fileTreeViewModel.documentViewModel = documentViewModel
+                // ViewModel 间依赖连接已由 WindowSession.init 完成，不在此重复连接。
                 applyAppearance(settings.appearanceMode)
 
-                // 后备机制：清理 UserDefaults 中残留的待打开路径
-                // 正常流程：AppDelegate.applicationDidFinishLaunching 主动发通知打开文件
-                // 此处仅在 AppDelegate 尚未处理（如极早期视图挂载时）才兜底
-                if let filePath = UserDefaults.standard.string(forKey: "pendingOpenFilePath") {
-                    UserDefaults.standard.removeObject(forKey: "pendingOpenFilePath")
-                    UserDefaults.standard.removeObject(forKey: "pendingOpenDirectoryPath")
-                    let url = URL(fileURLWithPath: filePath)
-                    // 幂等保护：如果 AppDelegate 已通过通知打开，FileOpenModifier 会跳过
-                    appViewModel.openSingleFile(url)
-                    fileTreeViewModel.selectedFileURL = url
-                    settings.lastOpenedDirectory = nil
-                    settings.lastOpenedFile = url
-                    settings.addRecentItem(url: url, isDirectory: false)
-                    await documentViewModel.loadFile(at: url)
-                } else if let dirPath = UserDefaults.standard.string(forKey: "pendingOpenDirectoryPath") {
-                    UserDefaults.standard.removeObject(forKey: "pendingOpenDirectoryPath")
-                    UserDefaults.standard.removeObject(forKey: "pendingOpenFilePath")
-                    let url = URL(fileURLWithPath: dirPath)
-                    appViewModel.openDirectory(url)
-                    settings.lastOpenedDirectory = url
-                    settings.lastOpenedFile = nil
-                    settings.addRecentItem(url: url, isDirectory: true)
-                    await fileTreeViewModel.loadDirectory(url)
-                }
-                // 不在此处调用 restoreLastLocation()
-                // 冷启动时，applicationDidFinishLaunching 通过 .restoreLastLocation 通知处理
-                // 这样可以确保通知在视图完全挂载后才发送，避免时序问题
+                // Task 14：已删除 pendingOpenFilePath/pendingOpenDirectoryPath UserDefaults 后备。
+                // 所有打开入口经 WindowCoordinator.enqueue(OpenRequest) 统一路由（Task 8）。
+                // restoreLastLocation 由 AppDelegate 经 AppStartupCoordinator 裁决后触发。
             }
             .onReceive(NotificationCenter.default.publisher(for: .resetToWelcome)) { _ in
                 resetToWelcome()
@@ -147,7 +131,9 @@ struct ContentView: View {
                 SidebarView(
                     fileTreeViewModel: fileTreeViewModel,
                     appViewModel: appViewModel,
-                    documentViewModel: documentViewModel
+                    documentViewModel: documentViewModel,
+                    session: session,
+                    commandTarget: session.commandTarget
                 )
                 .frame(width: appViewModel.isSidebarVisible ? appViewModel.sidebarWidth : 0)
                 .clipped()
@@ -162,7 +148,11 @@ struct ContentView: View {
                     appViewModel: appViewModel,
                     documentViewModel: documentViewModel,
                     fileTreeViewModel: fileTreeViewModel,
-                    settings: settings
+                    settings: settings,
+                    undoStore: session.undoStore,
+                    owningWindow: session.window,
+                    commandTarget: session.commandTarget,
+                    session: session
                 )
             }
         }
@@ -186,9 +176,6 @@ struct ContentView: View {
                 }
                 .transition(.opacity)
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleCommandPalette)) { _ in
-            toggleCommandPalette()
         }
         .onChange(of: commandPaletteViewModel.isVisible) { _, visible in
             if !visible && appViewModel.isCommandPaletteVisible {
@@ -423,316 +410,93 @@ struct SettingsContentView: View {
 
 // MARK: - 全屏状态监听
 
+/// 回归修复：全屏进入/退出通知必须按所属 `NSWindow` 过滤（需求 §8.4）。
+/// 一个窗口的全屏切换不得修改其他 session 的 `isFullScreen`。这里通过 windowID 绑定，
+/// 只在通知对应窗口确为本 session 所属时才更新 `appViewModel.isFullScreen`。
 private struct FullScreenStateModifier: ViewModifier {
-    let appViewModel: AppViewModel
+    let session: WindowSession
 
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
-                appViewModel.isFullScreen = true
+            .background(
+                FullScreenAnchor(session: session, appViewModel: session.appViewModel)
+                    .frame(width: 0, height: 0)
+            )
+    }
+}
+
+private struct FullScreenAnchor: NSViewRepresentable {
+    let session: WindowSession
+    let appViewModel: AppViewModel
+
+    func makeNSView(context: Context) -> NSView {
+        let view = FullScreenObserverView()
+        view.session = session
+        view.appViewModel = appViewModel
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? FullScreenObserverView)?.session = session
+        (nsView as? FullScreenObserverView)?.appViewModel = appViewModel
+    }
+
+    private final class FullScreenObserverView: NSView {
+        weak var session: WindowSession?
+        weak var appViewModel: AppViewModel?
+        nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            for o in observers { NotificationCenter.default.removeObserver(o) }
+            observers.removeAll()
+            guard let window else { return }
+
+            // 锚点挂载窗口时同步一次真实全屏状态：若窗口已处于全屏
+            // （例如窗口在锚点附加前进入全屏），避免错过进入通知。
+            if let appViewModel {
+                appViewModel.isFullScreen = window.styleMask.contains(.fullScreen)
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in
-                appViewModel.isFullScreen = false
+
+            let center = NotificationCenter.default
+            let enter = center.addObserver(forName: NSWindow.didEnterFullScreenNotification, object: window, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.appViewModel?.isFullScreen = true }
             }
+            let exit = center.addObserver(forName: NSWindow.didExitFullScreenNotification, object: window, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.appViewModel?.isFullScreen = false }
+            }
+            observers = [enter, exit]
+        }
+
+        deinit {
+            // 安全清理：窗口关闭或视图重建时可能未触发 viewDidMoveToWindow(nil)，
+            // deinit 兜底移除残留 observer，避免悬空回调。
+            for o in observers { NotificationCenter.default.removeObserver(o) }
+        }
     }
 }
 
 // MARK: - 快捷键监听
-
-private struct KeyboardShortcutModifier: ViewModifier {
-    let appViewModel: AppViewModel
-    let documentViewModel: DocumentViewModel
-
-    func body(content: Content) -> some View {
-        content
-            .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in
-                appViewModel.toggleSidebar()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .switchToRendered)) { _ in
-                documentViewModel.switchDisplayMode(.rendered)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .switchToRaw)) { _ in
-                documentViewModel.switchDisplayMode(.raw)
-            }
-    }
-}
+// Task 7：KeyboardShortcutModifier 的窗口级通知监听（toggleSidebar /
+// switchToRendered / switchToRaw）已迁移到 FocusedValues 命令路由，
+// 该 modifier 不再需要内容，移除以避免冗余广播监听。
 
 // MARK: - 文件打开通知
-
-/// 单窗口判定：仅当存在多个主窗口时，才需要 key 窗口守卫。
-/// 这样在正常的单窗口模式下，保存 / 新建永远不会被静默跳过（无回归风险）；
-/// 仅在 macOS 26 误创隐藏第二窗口时，才限定由 key 窗口处理，避免重复弹框。
-private enum SingleWindow {
-    @MainActor static var hasMultipleMainWindows: Bool {
-        NSApp.windows.filter { !($0 is NSPanel) && $0.styleMask.contains(.resizable) }.count > 1
-    }
-}
 
 private struct FileOpenModifier: ViewModifier {
     let appViewModel: AppViewModel
     let documentViewModel: DocumentViewModel
     let fileTreeViewModel: FileTreeViewModel
     let settings: SettingsModel
+    /// Task 13：用于判断本窗口是否为最后活动窗口，限制 lastOpened 写入。
+    let session: WindowSession
 
-    /// 确保主窗口可见。
-    /// 关闭窗口时 SwiftUI 仅隐藏而非销毁窗口，ContentView 仍可接收通知。
-    /// 若窗口隐藏时收到 .openFile/.openDirectory（如通过「打开最近使用」菜单），
-    /// 需先激活窗口，否则文件虽加载到 ViewModel 但用户看不到。
-    private func ensureWindowVisible() {
-        let hasVisible = NSApp.windows.contains {
-            $0.isVisible && !($0 is NSPanel) && $0.styleMask.contains(.resizable)
-        }
-        guard !hasVisible else { return }
-        for window in NSApp.windows
-            where !(window is NSPanel) && window.canBecomeKey && window.styleMask.contains(.resizable) {
-            window.setIsVisible(true)
-            window.makeKeyAndOrderFront(nil)
-            break
-        }
-        NSApp.activate(ignoringOtherApps: true)
-    }
+    /// Task 14：ensureWindowVisible 已移除。
+    /// 窗口激活由 WindowCoordinator.activate(windowID:) 统一处理，
+    /// 不再遍历 NSApp.windows 推断目标窗口。
 
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: .openDirectory)) { notification in
-                guard let url = notification.object as? URL else { return }
-                ensureWindowVisible()
-                // 幂等保护：如果已经在显示此目录，跳过
-                if appViewModel.rootDirectory == url { return }
-                if documentViewModel.isUntitled && documentViewModel.isDirty {
-                    handleUnsavedChangesBeforeAction { proceed in
-                        guard proceed else { return }
-                        appViewModel.openDirectory(url)
-                        settings.lastOpenedDirectory = url
-                        settings.lastOpenedFile = nil
-                        settings.addRecentItem(url: url, isDirectory: true)
-                    }
-                } else {
-                    appViewModel.openDirectory(url)
-                    settings.lastOpenedDirectory = url
-                    settings.lastOpenedFile = nil
-                    settings.addRecentItem(url: url, isDirectory: true)
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .openFile)) { notification in
-                guard let url = notification.object as? URL else { return }
-                ensureWindowVisible()
-                // 幂等保护：如果已经在显示此文件，跳过（防止 application(_:open:) 和 .onOpenURL 同时触发导致重复打开）
-                // 但如果文件被外部修改，触发带确认的 reload 流程（避免有未保存编辑时直接丢弃）
-                if documentViewModel.currentFileURL == url {
-                    if documentViewModel.isFileModifiedExternally {
-                        // 不直接调用 reloadFromDisk()，而是发送 reloadFile 通知
-                        // 让 DetailView 的 handleReloadButtonTapped() 处理（含脏文件确认弹窗）
-                        NotificationCenter.default.post(name: .reloadFile, object: nil)
-                    }
-                    return
-                }
-                if documentViewModel.isUntitled && documentViewModel.isDirty {
-                    handleUnsavedChangesBeforeAction { proceed in
-                        guard proceed else { return }
-                        appViewModel.openSingleFile(url)
-                        fileTreeViewModel.selectedFileURL = url
-                        settings.lastOpenedDirectory = nil
-                        settings.lastOpenedFile = url
-                        settings.addRecentItem(url: url, isDirectory: false)
-                        // 显式触发加载：窗口关闭后 selectedFileURL 可能与旧值相同，
-                        // 仅靠 onChange(of: selectedFileURL) 不一定触发，需直接加载兜底。
-                        // loadFile 内部有幂等判断，不会重复加载。
-                        Task {
-                            await documentViewModel.loadFile(at: url)
-                        }
-                    }
-                } else {
-                    appViewModel.openSingleFile(url)
-                    fileTreeViewModel.selectedFileURL = url
-                    settings.lastOpenedDirectory = nil
-                    settings.lastOpenedFile = url
-                    settings.addRecentItem(url: url, isDirectory: false)
-                    // 显式触发加载：同上，避免依赖 onChange 兜底。
-                    Task {
-                        await documentViewModel.loadFile(at: url)
-                    }
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .openLinkedMarkdownFile)) { notification in
-                guard let url = notification.object as? URL else { return }
-                handleLinkedMarkdownFileOpen(url.standardizedFileURL)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .newFile)) { _ in
-                // 仅 key 窗口处理（多窗口时），避免隐藏的第二窗口重复创建未保存文件
-                guard documentViewModel.isKeyWindow || !SingleWindow.hasMultipleMainWindows else { return }
-                if documentViewModel.isUntitled && documentViewModel.isDirty {
-                    handleUnsavedChangesBeforeAction { proceed in
-                        guard proceed else { return }
-                        let result = documentViewModel.createUntitledFile()
-                        guard result != nil else { return }
-                        fileTreeViewModel.selectedFileURL = nil
-                        appViewModel.selectedFile = nil
-                        appViewModel.hasUnsavedUntitled = true
-                        appViewModel.untitledFileName = documentViewModel.fileName
-                    }
-                } else {
-                    let result = documentViewModel.createUntitledFile()
-                    guard result != nil else { return }
-                    fileTreeViewModel.selectedFileURL = nil
-                    appViewModel.selectedFile = nil
-                    appViewModel.hasUnsavedUntitled = true
-                    appViewModel.untitledFileName = documentViewModel.fileName
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in
-                // 仅 key 窗口处理（多窗口时），避免隐藏的第二窗口重复弹保存框
-                guard documentViewModel.isKeyWindow || !SingleWindow.hasMultipleMainWindows else { return }
-                // 重入保护：如果正在保存或保存面板已显示，跳过
-                guard !documentViewModel.isSaving && !documentViewModel.isSavePanelShowing else { return }
-                Task {
-                    await documentViewModel.save()
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .saveAsFile)) { _ in
-                // 仅 key 窗口处理（多窗口时），避免隐藏的第二窗口重复弹保存框
-                guard documentViewModel.isKeyWindow || !SingleWindow.hasMultipleMainWindows else { return }
-                // 重入保护：如果保存面板已经在显示，跳过
-                guard !documentViewModel.isSavePanelShowing else { return }
-                documentViewModel.isSavePanelShowing = true
-
-                let language = settings.languagePref.resolvedLanguage
-                let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
-                let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
-
-                if let saveURL = OpenPanelHelper.showSavePanel(
-                    language: language,
-                    defaultDirectory: defaultDir,
-                    suggestedName: suggestedName
-                ) {
-                    Task {
-                        await documentViewModel.saveAs(to: saveURL)
-                        appViewModel.hasUnsavedUntitled = false
-
-                        if let rootDir = appViewModel.rootDirectory,
-                           saveURL.path.hasPrefix(rootDir.path + "/") {
-                            await fileTreeViewModel.loadDirectory(rootDir)
-                            fileTreeViewModel.selectedFileURL = saveURL
-                        }
-
-                        // 更新最近打开记录
-                        settings.lastOpenedFile = saveURL
-                        settings.addRecentItem(url: saveURL, isDirectory: false)
-
-                        // 保存完成后才重置标志，避免 saveAs 尚未完成时 isSavePanelShowing 已为 false
-                        documentViewModel.isSavePanelShowing = false
-                    }
-                } else {
-                    // 用户取消了保存面板，立即重置标志
-                    documentViewModel.isSavePanelShowing = false
-                }
-            }
-    }
-
-    /// 打开渲染页内点击的本地 Markdown 链接。
-    /// 当前处于目录模式且目标文件仍在根目录内时，只切换文件树选中项，避免退回单文件模式。
-    private func handleLinkedMarkdownFileOpen(_ url: URL) {
-        if documentViewModel.currentFileURL?.standardizedFileURL == url {
-            return
-        }
-
-        if documentViewModel.isUntitled && documentViewModel.isDirty {
-            handleUnsavedChangesBeforeAction { proceed in
-                guard proceed else { return }
-                openLinkedMarkdownFile(url)
-            }
-        } else {
-            openLinkedMarkdownFile(url)
-        }
-    }
-
-    private func openLinkedMarkdownFile(_ url: URL) {
-        if let rootDir = appViewModel.rootDirectory,
-           isFileURL(url, inside: rootDir) {
-            fileTreeViewModel.selectedFileURL = url
-            settings.lastOpenedFile = url
-            settings.addRecentItem(url: url, isDirectory: false)
-            return
-        }
-
-        appViewModel.openSingleFile(url)
-        fileTreeViewModel.selectedFileURL = url
-        settings.lastOpenedDirectory = nil
-        settings.lastOpenedFile = url
-        settings.addRecentItem(url: url, isDirectory: false)
-    }
-
-    private func isFileURL(_ fileURL: URL, inside directoryURL: URL) -> Bool {
-        let filePath = fileURL.standardizedFileURL.path
-        let directoryPath = directoryURL.standardizedFileURL.path
-        let prefix = directoryPath.hasSuffix("/") ? directoryPath : "\(directoryPath)/"
-        return filePath.hasPrefix(prefix)
-    }
-
-    /// 通用未保存修改弹窗处理
-    /// 仅在临时新建文件（isUntitled && isDirty）有未保存更改时调用
-    /// 弹窗确认后执行操作，保护临时文件内容不丢失
-    /// - Parameter completion: 回调，`proceed` 为 true 表示用户选择保存或放弃，可继续操作；false 表示取消
-    private func handleUnsavedChangesBeforeAction(completion: @escaping (_ proceed: Bool) -> Void) {
-        let language = settings.languagePref.resolvedLanguage
-
-        let alert = NSAlert()
-        alert.messageText = L10n.tr(.unsavedChangesTitle, language: language)
-        alert.informativeText = L10n.tr(.unsavedChangesMessage, language: language)
-        alert.alertStyle = .warning
-
-        alert.addButton(withTitle: L10n.tr(.unsavedSave, language: language))
-        alert.addButton(withTitle: L10n.tr(.unsavedDontSave, language: language))
-        alert.addButton(withTitle: L10n.tr(.unsavedCancel, language: language))
-
-        alert.buttons[0].keyEquivalent = "\r"
-        alert.buttons[1].keyEquivalent = "d"
-        alert.buttons[1].keyEquivalentModifierMask = .command
-        alert.buttons[2].keyEquivalent = "\u{1b}"
-
-        let response = alert.runModal()
-
-        switch response {
-        case .alertFirstButtonReturn:
-            // 保存：临时新建文件走另存为流程
-            let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
-            let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
-
-            if let saveURL = OpenPanelHelper.showSavePanel(
-                language: language,
-                defaultDirectory: defaultDir,
-                suggestedName: suggestedName
-            ) {
-                Task {
-                    await documentViewModel.saveAs(to: saveURL)
-                    appViewModel.hasUnsavedUntitled = false
-
-                    // 如果保存在当前目录下，刷新文件树
-                    if let rootDir = appViewModel.rootDirectory,
-                       saveURL.path.hasPrefix(rootDir.path + "/") {
-                        await fileTreeViewModel.loadDirectory(rootDir)
-                        fileTreeViewModel.selectedFileURL = saveURL
-                    }
-
-                    settings.lastOpenedFile = saveURL
-                    settings.addRecentItem(url: saveURL, isDirectory: false)
-                    completion(true)
-                }
-            } else {
-                // 用户取消了另存为，不继续操作
-                completion(false)
-            }
-
-        case .alertSecondButtonReturn:
-            // 不保存
-            documentViewModel.discardUntitledFile()
-            appViewModel.hasUnsavedUntitled = false
-            completion(true)
-
-        default:
-            // 取消
-            completion(false)
-        }
     }
 }
 
@@ -769,6 +533,8 @@ private struct SelectionChangeModifier: ViewModifier {
     let documentViewModel: DocumentViewModel
     let fileTreeViewModel: FileTreeViewModel
     let settings: SettingsModel
+    /// 回归修复：保存面板需附着到发起操作的窗口（窗口级 sheet）。
+    let session: WindowSession
 
     func body(content: Content) -> some View {
         content
@@ -825,27 +591,34 @@ private struct SelectionChangeModifier: ViewModifier {
             // 保存：临时新建文件走另存为流程
             let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
             let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
+            let hostWindow = session.window
 
-            if let saveURL = OpenPanelHelper.showSavePanel(
-                language: language,
-                defaultDirectory: defaultDir,
-                suggestedName: suggestedName
-            ) {
-                Task {
-                    await documentViewModel.saveAs(to: saveURL)
-                    appViewModel.hasUnsavedUntitled = false
-                    await documentViewModel.loadFile(at: newURL)
-                    let node = findFileNode(in: fileTreeViewModel.nodes, url: newURL)
-                    appViewModel.selectedFile = node
-
-                    if let rootDir = appViewModel.rootDirectory,
-                       saveURL.path.hasPrefix(rootDir.path + "/") {
-                        await fileTreeViewModel.loadDirectory(rootDir)
-                        fileTreeViewModel.selectedFileURL = saveURL
-                    }
+            Task { @MainActor in
+                guard let saveURL = await OpenPanelHelper.showSavePanel(
+                    for: hostWindow,
+                    language: language,
+                    defaultDirectory: defaultDir,
+                    suggestedName: suggestedName
+                ) else {
+                    fileTreeViewModel.selectedFileURL = oldURL
+                    return
                 }
-            } else {
-                fileTreeViewModel.selectedFileURL = oldURL
+                let success = await documentViewModel.saveAs(to: saveURL)
+                guard success else {
+                    // 写入失败：回退选中项，保留原内容
+                    fileTreeViewModel.selectedFileURL = oldURL
+                    return
+                }
+                appViewModel.hasUnsavedUntitled = false
+                await documentViewModel.loadFile(at: newURL)
+                let node = findFileNode(in: fileTreeViewModel.nodes, url: newURL)
+                appViewModel.selectedFile = node
+
+                if let rootDir = appViewModel.rootDirectory,
+                   saveURL.path.hasPrefix(rootDir.path + "/") {
+                    await fileTreeViewModel.loadDirectory(rootDir)
+                    fileTreeViewModel.selectedFileURL = saveURL
+                }
             }
 
         case .alertSecondButtonReturn:
@@ -888,28 +661,35 @@ private struct SelectionChangeModifier: ViewModifier {
             // 另存为
             let defaultDir = settings.lastOpenedDirectory ?? deletedURL.deletingLastPathComponent()
             let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
+            let hostWindow = session.window
 
-            if let saveURL = OpenPanelHelper.showSavePanel(
-                language: language,
-                defaultDirectory: defaultDir,
-                suggestedName: suggestedName
-            ) {
-                Task {
-                    await documentViewModel.saveAs(to: saveURL)
-                    documentViewModel.deselectCurrentFile()
+            Task { @MainActor in
+                guard let saveURL = await OpenPanelHelper.showSavePanel(
+                    for: hostWindow,
+                    language: language,
+                    defaultDirectory: defaultDir,
+                    suggestedName: suggestedName
+                ) else {
+                    // 用户取消了另存为，保留当前文档内容让用户继续操作
+                    // 但文件树中已无此文件，需要重新选中以避免状态不一致
                     appViewModel.selectedFile = nil
-
-                    // 如果保存在当前目录下，刷新文件树并选中
-                    if let rootDir = appViewModel.rootDirectory,
-                       saveURL.path.hasPrefix(rootDir.path) {
-                        await fileTreeViewModel.refreshDirectory()
-                        fileTreeViewModel.selectedFileURL = saveURL
-                    }
+                    return
                 }
-            } else {
-                // 用户取消了另存为，保留当前文档内容让用户继续操作
-                // 但文件树中已无此文件，需要重新选中以避免状态不一致
+                let success = await documentViewModel.saveAs(to: saveURL)
+                guard success else {
+                    // 写入失败：保留当前文档内容让用户继续操作
+                    appViewModel.selectedFile = nil
+                    return
+                }
+                documentViewModel.deselectCurrentFile()
                 appViewModel.selectedFile = nil
+
+                // 如果保存在当前目录下，刷新文件树并选中
+                if let rootDir = appViewModel.rootDirectory,
+                   saveURL.path.hasPrefix(rootDir.path) {
+                    await fileTreeViewModel.refreshDirectory()
+                    fileTreeViewModel.selectedFileURL = saveURL
+                }
             }
 
         default:
@@ -956,15 +736,10 @@ private struct SettingsChangeModifier: ViewModifier {
 }
 
 // MARK: - 切换设置（Cmd+,）
-
+// Task 7：toggleSettings 已迁移到 FocusedValues 命令路由，此 modifier 不再监听通知。
 private struct ToggleSettingsModifier: ViewModifier {
-    let appViewModel: AppViewModel
-
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: .toggleSettings)) { _ in
-                appViewModel.toggleSettings()
-            }
     }
 }
 
@@ -1021,25 +796,29 @@ private struct TrafficLightHider: NSViewRepresentable {
 
 /// 追踪当前 ContentView 所在 NSWindow 是否为 key 窗口，并写入 DocumentViewModel.isKeyWindow。
 ///
-/// 修复「无限弹出保存框」根因：macOS 26 WindowGroup 在文件打开事件时可能创建隐藏的第二窗口，
-/// 第二个 ContentView 实例会独立监听 .saveFile / .saveAsFile / .newFile 通知并各自弹框。
-/// 通过本追踪器，仅 key 窗口的 ContentView 处理这些通知，隐藏 / 非前台窗口被静默跳过。
+/// 回归修复：多窗口改造后窗口级命令改走 FocusedValues 路由，本追踪器仅保留
+/// `isKeyWindow` 状态与 MRU 更新；窗口级命令不再依赖此标志做静默跳过。
 private struct KeyWindowTracker: NSViewRepresentable {
     let documentViewModel: DocumentViewModel
+    /// 回归修复：didBecomeKey 时更新 Coordinator 的 MRU / lastActiveWindowID（需求 §8.4）。
+    let session: WindowSession
 
     func makeNSView(context: Context) -> NSView {
         let view = KeyWindowObserverView()
         view.documentViewModel = documentViewModel
+        view.session = session
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         (nsView as? KeyWindowObserverView)?.documentViewModel = documentViewModel
+        (nsView as? KeyWindowObserverView)?.session = session
     }
 
     private final class KeyWindowObserverView: NSView {
         weak var documentViewModel: DocumentViewModel?
-        private var observers: [NSObjectProtocol] = []
+        weak var session: WindowSession?
+        nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -1053,7 +832,11 @@ private struct KeyWindowTracker: NSViewRepresentable {
             let center = NotificationCenter.default
             let became = center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { [weak self] note in
                 guard let self, let noted = note.object as? NSWindow, noted === self.window else { return }
-                Task { @MainActor in self.documentViewModel?.isKeyWindow = true }
+                Task { @MainActor in
+                    self.documentViewModel?.isKeyWindow = true
+                    // 回归修复：key 切换更新 MRU，保证最近位置记录、Dock 重开与关闭回退正确。
+                    self.session?.coordinator?.recordActive(windowID: self.session?.id ?? WindowID())
+                }
             }
             let resigned = center.addObserver(forName: NSWindow.didResignKeyNotification, object: nil, queue: .main) { [weak self] note in
                 guard let self, let noted = note.object as? NSWindow, noted === self.window else { return }
@@ -1064,30 +847,41 @@ private struct KeyWindowTracker: NSViewRepresentable {
     }
 }
 
-// MARK: - 窗口关闭保护（未保存更改提醒）
+// MARK: - 窗口关闭保护（Task 1：异步关闭状态机，消除 semaphore 死锁）
 
-/// 通过 NSViewRepresentable 设置窗口代理，在关闭前检查未保存更改
-/// 使用 performClose 触发 windowShouldClose，展示保存/不保存/取消对话框
+/// 通过 NSViewRepresentable 设置窗口代理，关闭前处理未保存 Untitled。
+///
+/// Cmd+W 状态机（`windowShouldClose` 必须同步返回，但不得同步等待保存）：
+/// 1. 无脏 Untitled：返回 `true`。
+/// 2. 已有关闭流程运行或持有一次性放行标记：消费标记返回 `true`，否则返回 `false`。
+/// 3. 首次关闭脏 Untitled：启动异步关闭流程，本次返回 `false`。
+/// 4. 异步流程成功（保存成功或选择不保存）：设置一次性 `allowNextClose`，再次 `performClose(nil)`。
+/// 5. 下一次 `windowShouldClose` 消费 `allowNextClose` 并返回 `true`。
+/// 6. 取消或保存失败：保持窗口打开。
 private struct WindowCloseGuard: NSViewRepresentable {
-    let documentViewModel: DocumentViewModel
-    let settings: SettingsModel
+    let session: WindowSession
 
     func makeNSView(context: Context) -> NSView {
         let view = WindowCloseGuardView()
-        view.documentViewModel = documentViewModel
-        view.settings = settings
+        view.session = session
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        (nsView as? WindowCloseGuardView)?.documentViewModel = documentViewModel
-        (nsView as? WindowCloseGuardView)?.settings = settings
+        (nsView as? WindowCloseGuardView)?.session = session
     }
 
-    /// 持有窗口代理的 NSView，在 viewDidMoveToWindow 中设置代理
     private final class WindowCloseGuardView: NSView, NSWindowDelegate {
-        weak var documentViewModel: DocumentViewModel?
-        weak var settings: SettingsModel?
+        weak var session: WindowSession?
+
+        /// 是否有异步关闭流程正在运行（防重复启动）。
+        /// 在 `windowShouldClose` 启动异步流程时置位，在窗口真正开始关闭（`windowWillClose`）
+        /// 时复位——而不是在 `allowNextClose` 消费时。这样 `performClose` 复关触发的标准关闭
+        /// 流程期间标记仍保持，避免 Task 3 同步 dispose 与路由查询产生竞态。
+        private var isClosingInProgress = false
+
+        /// 一次性放行标记：异步保存流程成功后置位，下一次 `windowShouldClose` 消费并返回 true。
+        private var allowNextClose = false
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -1095,64 +889,54 @@ private struct WindowCloseGuard: NSViewRepresentable {
         }
 
         func windowShouldClose(_ sender: NSWindow) -> Bool {
-            guard let doc = documentViewModel else { return true }
+            guard let session else { return true }
 
-            // 仅对临时新建文件且有未保存更改时弹窗提醒
-            // 普通脏文件（已保存在磁盘）允许自由关闭，不弹窗
-            if !(doc.isUntitled && doc.isDirty) { return true }
-
-            let language = settings?.languagePref.resolvedLanguage ?? .en
-
-            // 显示未保存更改提醒
-            let alert = NSAlert()
-            alert.messageText = L10n.tr(.unsavedChangesTitle, language: language)
-            alert.informativeText = L10n.tr(.unsavedChangesMessage, language: language)
-            alert.alertStyle = .warning
-
-            alert.addButton(withTitle: L10n.tr(.unsavedSave, language: language))
-            alert.addButton(withTitle: L10n.tr(.unsavedDontSave, language: language))
-            alert.addButton(withTitle: L10n.tr(.unsavedCancel, language: language))
-
-            // 设置「保存」为默认按钮（回车键）
-            alert.buttons[0].keyEquivalent = "\r"
-            // 设置「不保存」为 Cmd+D 快捷键
-            alert.buttons[1].keyEquivalent = "d"
-            alert.buttons[1].keyEquivalentModifierMask = .command
-            // 设置「取消」为 Esc 键
-            alert.buttons[2].keyEquivalent = "\u{1b}"
-
-            let response = alert.runModal()
-
-            switch response {
-            case .alertFirstButtonReturn:
-                // 保存：临时新建文件走另存为流程
-                let defaultDir = settings?.lastOpenedDirectory ?? settings?.lastOpenedFile?.deletingLastPathComponent()
-                let suggestedName = doc.fileName.isEmpty ? "Untitled.md" : doc.fileName
-
-                if let saveURL = OpenPanelHelper.showSavePanel(
-                    language: language,
-                    defaultDirectory: defaultDir,
-                    suggestedName: suggestedName
-                ) {
-                    Task {
-                        await doc.saveAs(to: saveURL)
-                        // 保存成功后关闭窗口
-                        sender.close()
-                    }
-                }
-                // 用户取消了另存为，不关闭窗口
-                return false
-
-            case .alertSecondButtonReturn:
-                // 不保存，彻底放弃临时新建文件（含内存状态）后关闭
-                // 复用 discardUntitledFile()，确保关闭后 isUntitled/isDirty/currentFileURL
-                // 全部清空，避免后续「打开最近使用」误弹未保存提示
-                doc.discardUntitledFile()
+            // 1. 一次性放行标记：异步流程已确认可关闭，消费并放行（标记在 windowWillClose 复位）
+            if allowNextClose {
+                allowNextClose = false
                 return true
+            }
 
-            default:
-                // 取消，不关闭窗口
+            // 2. 已有异步关闭流程运行：拦截本次，避免二次弹窗
+            if isClosingInProgress {
                 return false
+            }
+
+            // 3. 无脏 Untitled：直接关闭
+            if session.prepareForClose() == .close {
+                return true
+            }
+
+            // 4. 首次关闭脏 Untitled：启动异步流程，本次返回 false
+            isClosingInProgress = true
+            startAsyncClose(session: session, window: sender)
+            return false
+        }
+
+        /// 窗口真正开始关闭时复位运行标记。
+        /// 复关路径（performClose）触发的 windowShouldClose 返回 true 后，NSWindow 走标准关闭，
+        /// 此回调同步执行，标记在此复位，与 Task 3 同步 dispose 同一时刻。
+        func windowWillClose(_ notification: Notification) {
+            isClosingInProgress = false
+            allowNextClose = false
+        }
+
+        /// 异步完成「询问 → 选择路径 → 保存」，成功后复关，失败保持窗口。
+        private func startAsyncClose(session: WindowSession, window: NSWindow) {
+            let termCoord = AppDelegate.sharedTerminationCoordinator
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let decision = await termCoord.resolveUnsavedChanges(for: session)
+                switch decision {
+                case .proceed:
+                    // 保存成功或选择不保存：置一次性放行标记，触发复关
+                    self.allowNextClose = true
+                    // performClose 会再次调用 windowShouldClose，消费 allowNextClose 返回 true
+                    window.performClose(nil)
+                case .cancel:
+                    // 取消或保存失败：保持窗口打开，复位运行标记
+                    self.isClosingInProgress = false
+                }
             }
         }
     }

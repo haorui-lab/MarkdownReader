@@ -3,6 +3,11 @@ import MarkdownReaderKit
 import WebKit
 
 class MarkdownNavigationDecider: WebPage.NavigationDeciding {
+    /// 回归修复：Markdown 内链不再全局广播 `.openLinkedMarkdownFile`。WebView 通过
+    /// 此 closure 把链接 URL 回传给所属 session，再按目录内导航或外部打开规则处理，
+    /// 确保内链只由来源窗口处理（需求 §6.7）。
+    var onOpenLinkedMarkdownFile: ((URL) -> Void)?
+
     func decidePolicy(
         for action: WebPage.NavigationAction,
         preferences: inout WebPage.NavigationPreferences
@@ -15,8 +20,9 @@ class MarkdownNavigationDecider: WebPage.NavigationDeciding {
                let fileURL = localFileURL(fromMRURL: url),
                FileService.isTreeDisplayExtension(fileURL),
                FileManager.default.fileExists(atPath: fileURL.path) {
+                let handler = onOpenLinkedMarkdownFile
                 await MainActor.run {
-                    NotificationCenter.default.post(name: .openLinkedMarkdownFile, object: fileURL)
+                    handler?(fileURL)
                 }
                 return .cancel
             }
@@ -32,8 +38,9 @@ class MarkdownNavigationDecider: WebPage.NavigationDeciding {
                 let fileURL = url.standardizedFileURL
                 if FileService.isTreeDisplayExtension(fileURL),
                    FileManager.default.fileExists(atPath: fileURL.path) {
+                    let handler = onOpenLinkedMarkdownFile
                     await MainActor.run {
-                        NotificationCenter.default.post(name: .openLinkedMarkdownFile, object: fileURL)
+                        handler?(fileURL)
                     }
                 }
                 return .cancel
@@ -85,6 +92,13 @@ struct WebViewMarkdownView: View {
     var contentVersion: Int = 0
     var onVisibleHeadingChanged: ((MarkdownHTMLService.HeadingInfo?) -> Void)?
     var onVisibleLineChanged: ((Int) -> Void)?
+    /// 回归修复：本窗口命令目标（由 WindowSceneHost 注入）。视图直接在其上注册 zoom
+    /// handler，不再发布独立 focusedSceneValue 覆盖焦点路由，也不在内部临时 @FocusedValue 反查。
+    var commandTarget: WindowCommandTarget?
+
+    /// 回归修复：Markdown 内链回调。WebView 把点击的本地 Markdown 链接回传给所属
+    /// session，按目录内导航或外部打开规则处理，不再全局广播。
+    var onOpenLinkedMarkdownFile: ((URL) -> Void)?
 
     @State private var page = WebPage()
     @Binding var exportedPage: WebPage?
@@ -98,6 +112,8 @@ struct WebViewMarkdownView: View {
     @State private var zoomLevel: CGFloat = 1.0
     /// 上次处理的 contentVersion，用于检测程序化内容更新（reload/load）
     @State private var lastHandledContentVersion: Int = 0
+    /// 持有 navigationDecider，使其生命周期与视图一致，便于注入内链 closure。
+    @State private var navigationDecider = MarkdownNavigationDecider()
 
     var body: some View {
         WebView(page)
@@ -115,6 +131,8 @@ struct WebViewMarkdownView: View {
             .onAppear {
                 exportedPage = page
                 configureAndLoad()
+                registerZoomHandler()
+                syncLinkedFileHandler()
             }
             .onChange(of: content) { _, newContent in
                 if newContent == lastLoadedContent { return }
@@ -182,20 +200,34 @@ struct WebViewMarkdownView: View {
             }
             .onDisappear {
                 scrollSyncTimer?.invalidate()
+                // 视图退出：清理 zoom handler，避免残留回调指向已销毁视图。
+                commandTarget?.zoomHandler = nil
+                navigationDecider.onOpenLinkedMarkdownFile = nil
             }
-            .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in
-                applyZoom(zoomLevel + 0.1)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in
-                applyZoom(zoomLevel - 0.1)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .zoomReset)) { _ in
-                applyZoom(1.0)
-            }
+            // 回归修复：zoom handler 直接注册到注入的本窗口命令目标，
+            // 不再发布独立 focusedSceneValue（覆盖会抢夺焦点路由）。
+            .onChange(of: commandTarget?.objectIdentifier) { _, _ in registerZoomHandler() }
             .environment(\.openURL, OpenURLAction { url in
                 NSWorkspace.shared.open(url)
                 return .handled
             })
+    }
+
+    /// 把 zoom handler 注册到注入的本窗口命令目标（由 WindowSceneHost 发布并绑定本 session）。
+    private func registerZoomHandler() {
+        commandTarget?.zoomHandler = { cmd in
+            switch cmd {
+            case .in: applyZoom(zoomLevel + 0.1)
+            case .out: applyZoom(zoomLevel - 0.1)
+            case .reset: applyZoom(1.0)
+            }
+        }
+    }
+
+    /// 把父视图注入的内链 closure 同步到 navigationDecider。
+    /// 仅在 WebPage 尚未创建时安全（navigationDecider 为 @State，始终存活）。
+    private func syncLinkedFileHandler() {
+        navigationDecider.onOpenLinkedMarkdownFile = onOpenLinkedMarkdownFile
     }
 
     private func configureAndLoad() {
@@ -210,7 +242,7 @@ struct WebViewMarkdownView: View {
         var configuration = WebPage.Configuration()
         configuration.urlSchemeHandlers[scheme] = handler
 
-        let navigationDecider = MarkdownNavigationDecider()
+        navigationDecider.onOpenLinkedMarkdownFile = onOpenLinkedMarkdownFile
         page = WebPage(
             configuration: configuration,
             navigationDecider: navigationDecider

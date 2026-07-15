@@ -97,9 +97,8 @@ final class TextViewSearchRef {
 
 // MARK: - 全局 Per-File UndoManager 引用
 
-/// 当前活跃文件的 UndoManager，供 NSWindow swizzled getter 访问
-/// nonisolated(unsafe) 确保 ObjC runtime 可从任何线程读取
-nonisolated(unsafe) var _activePerFileUndoManager: UndoManager?
+/// Task 10：已移除全局 _activePerFileUndoManager。
+/// swizzled getter 通过 NSWindow.undoStore associated object 读取窗口级 store。
 
 // MARK: - NSWindow undoManager Swizzling
 
@@ -124,7 +123,7 @@ extension NSWindow {
     /// Swizzled undoManager getter — 返回 per-file UndoManager（如果存在）
     /// 由于 method_exchangeImplementations，调用 self._swizzled_undoManager() 实际调用原始实现
     @objc private func _swizzled_undoManager() -> UndoManager? {
-        if Thread.isMainThread, let um = _activePerFileUndoManager {
+        if Thread.isMainThread, let um = self.undoStore?.activeUndoManager {
             return um
         }
         // 调用原始实现（swizzling 交换了实现，所以这里实际调用原始方法）
@@ -134,88 +133,14 @@ extension NSWindow {
 
 // MARK: - Per-File UndoManager Provider
 
-/// 全局 UndoManager 提供者，管理 per-file undo 历史
-/// 通过 NSWindow swizzled getter 和 NSTextViewDelegate.undoManager(for:)
-/// 确保菜单验证和文本编辑使用同一个 per-file UndoManager
-@MainActor
-final class UndoManagerProvider: NSObject {
-    static let shared = UndoManagerProvider()
-
-    /// Per-file UndoManager 池（nonisolated(unsafe) 以便 swizzled getter 访问）
-    nonisolated(unsafe) private var _undoManagers: [URL: UndoManager] = [:]
-
-    /// 当前活跃文件的 URL
-    var activeFileURL: URL?
-    nonisolated(unsafe) private var _activeFileURL: URL?
-
-    /// 当前活跃文件的 UndoManager
-    var activeUndoManager: UndoManager {
-        if let url = activeFileURL, let existing = _undoManagers[url] {
-            return existing
-        }
-        // 创建新的 UndoManager
-        let manager = UndoManager()
-        manager.levelsOfUndo = 100
-        if let url = activeFileURL {
-            _undoManagers[url] = manager
-        }
-        return manager
-    }
-
-    /// 获取指定文件的 UndoManager
-    func undoManager(for url: URL?) -> UndoManager? {
-        guard let url = url else { return nil }
-        if let existing = _undoManagers[url] {
-            return existing
-        }
-        let manager = UndoManager()
-        manager.levelsOfUndo = 100
-        _undoManagers[url] = manager
-        return manager
-    }
-
-    /// 切换活跃文件
-    func switchFile(to url: URL?) {
-        activeFileURL = url
-        _activeFileURL = url
-        // 确保 UndoManager 存在
-        if let url = url, _undoManagers[url] == nil {
-            let manager = UndoManager()
-            manager.levelsOfUndo = 100
-            _undoManagers[url] = manager
-        }
-        // 更新全局引用（供 NSWindow swizzled getter 使用）
-        _activePerFileUndoManager = url.flatMap { _undoManagers[$0] }
-        // 清理过多的 UndoManager
-        cleanupIfNeeded()
-    }
-
-    /// 清除所有 per-file UndoManager 的 undo 动作
-    /// 当 NSTextView 被释放时调用，防止悬空指针 crash
-    /// NSUndoManager 不 retain invocation targets，如果 target 被释放后触发 undo 会 crash
-    func removeAllActions() {
-        for (_, um) in _undoManagers {
-            um.removeAllActions()
-        }
-        _activePerFileUndoManager = nil
-    }
-
-    /// 清理过多的 UndoManager（保留最近 20 个）
-    private func cleanupIfNeeded() {
-        guard _undoManagers.count > 20 else { return }
-        let keysToRemove = _undoManagers.keys.filter { $0 != activeFileURL }
-        for key in keysToRemove.prefix(_undoManagers.count - 10) {
-            _undoManagers.removeValue(forKey: key)
-        }
-    }
-}
-
 // MARK: - 可控滚动文本视图
 
 /// NSTextView 子类，支持在高亮期间抑制自动滚动
 /// 防止 setSelectedRange / 布局变化触发 scrollRangeToVisible 导致跳动
 class HighlightableTextView: NSTextView {
     var suppressAutoScroll = false
+    /// 弱引用窗口级 undoStore（Task 10），deinit 时清空 undo 动作防止悬空指针。
+    weak var undoStore: WindowUndoStore?
 
     // 不重写 undoManager — 通过 NSTextViewDelegate.undoManager(for:) 和
     // NSWindowDelegate.windowWillReturnUndoManager: 提供 per-file UndoManager
@@ -236,8 +161,9 @@ class HighlightableTextView: NSTextView {
         // NSUndoManager 不 retain invocation targets，如果 NSTextView 被释放后
         // UndoManager 仍有引用它的 undo 动作，触发 undo 时会访问悬空指针导致 crash
         // 使用异步调度因为 deinit 不能调用 @MainActor 方法
+        let store = undoStore
         DispatchQueue.main.async {
-            UndoManagerProvider.shared.removeAllActions()
+            store?.removeAllActions()
         }
     }
 }
@@ -261,9 +187,11 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
     var isFindBarVisible: Bool = false
     /// 光标行号变化回调（0-based 行号）
     var onCursorLineNumberChanged: ((Int) -> Void)?
-    /// 内容版本号，变化时强制用 ViewModel 内容覆盖编辑器（阻止 firstResponder 回写）
-    /// 用于 reload 操作：ViewModel 更新了 content 但 NSTextView 仍持有旧内容
-    var contentVersion: Int = 0
+   /// 内容版本号，变化时强制用 ViewModel 内容覆盖编辑器（阻止 firstResponder 回写）
+   /// 用于 reload 操作：ViewModel 更新了 content 但 NSTextView 仍持有旧内容
+   var contentVersion: Int = 0
+    /// 窗口级 Undo 存储（Task 10）。nil 时回退到 window.undoStore。
+    var undoStore: WindowUndoStore?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -315,7 +243,7 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         textView.typingAttributes[.foregroundColor] = themeColors.ink.nsColor
 
         // 初始内容 — 使用 textStorage API + disableUndoRegistration 避免 undo 记录
-        let um = UndoManagerProvider.shared.undoManager(for: fileURL)
+        let um = undoStore?.undoManager(for: fileURL)
         um?.disableUndoRegistration()
         if let textStorage = textView.textStorage {
             textStorage.replaceCharacters(in: NSRange(location: 0, length: 0), with: content)
@@ -339,6 +267,8 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
             fontSize: fontSize
         )
 
+        // Task 10：把 undoStore 弱引用传给 textView，deinit 时清空
+        textView.undoStore = undoStore
         context.coordinator.textView = textView
         context.coordinator.scrollView = scrollView
         context.coordinator.wasActive = isActive
@@ -348,8 +278,8 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         // 记录当前 appearance，后续 updateNSView 中检测变化
         context.coordinator.lastAppearanceToken = NSApp.effectiveAppearance.description
 
-        // 初始化 UndoManagerProvider 的活跃文件
-        UndoManagerProvider.shared.switchFile(to: fileURL)
+        // Task 10：切换窗口级 undoStore 的活跃文件
+        undoStore?.switchFile(to: fileURL)
 
         // 如果处于活跃状态，自动获取焦点
         if isActive {
@@ -364,9 +294,9 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? HighlightableTextView else { return }
 
-        // 检测文件切换：更新 UndoManagerProvider 的活跃文件
+        // 检测文件切换：更新 undoStore 的活跃文件
         if context.coordinator.currentFileURL != fileURL {
-            UndoManagerProvider.shared.switchFile(to: fileURL)
+            undoStore?.switchFile(to: fileURL)
             context.coordinator.currentFileURL = fileURL
         }
 
@@ -559,7 +489,7 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         /// 此方法返回的 UndoManager 同时也是 windowWillReturnUndoManager: 返回的实例
         /// 确保文本编辑和菜单验证使用同一个 UndoManager
         func undoManager(for view: NSTextView) -> UndoManager? {
-            return UndoManagerProvider.shared.activeUndoManager
+            return parent.undoStore?.activeUndoManager
         }
 
         func textDidChange(_ notification: Notification) {

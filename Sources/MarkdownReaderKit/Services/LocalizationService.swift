@@ -262,6 +262,17 @@ public enum L10n {
         case commandPaletteOpenFolder
         case commandPaletteFilePlaceholder
         case commandPaletteCommandTitle
+
+        // 目录树 - 跨窗口所有权标记（Task 9）
+        case fileOwnedByAnotherWindow
+
+        // 多窗口菜单（回归修复）
+        case menuNewWindow
+        case menuSaveAs
+        case windowMenuMinimize
+        case windowMenuZoom
+        case windowMenuBringAllToFront
+        case windowMenu
     }
 
     // MARK: - 翻译字典
@@ -451,6 +462,13 @@ public enum L10n {
         .commandPaletteOpenFolder: "Open Folder\u{2026}",
         .commandPaletteFilePlaceholder: "Search files by name\u{2026}",
         .commandPaletteCommandTitle: "Command Palette\u{2026}",
+        .fileOwnedByAnotherWindow: "Open in another window",
+        .menuNewWindow: "New Window",
+        .menuSaveAs: "Save As\u{2026}",
+        .windowMenuMinimize: "Minimize",
+        .windowMenuZoom: "Zoom",
+        .windowMenuBringAllToFront: "Bring All to Front",
+        .windowMenu: "Window",
     ]
 
     private static let zhCN: [Key: String] = [
@@ -638,6 +656,13 @@ public enum L10n {
         .commandPaletteOpenFolder: "打开文件夹\u{2026}",
         .commandPaletteFilePlaceholder: "按名称搜索文件\u{2026}",
         .commandPaletteCommandTitle: "命令面板\u{2026}",
+        .fileOwnedByAnotherWindow: "已在另一窗口打开",
+        .menuNewWindow: "新建窗口",
+        .menuSaveAs: "另存为\u{2026}",
+        .windowMenuMinimize: "最小化",
+        .windowMenuZoom: "缩放",
+        .windowMenuBringAllToFront: "将全部窗口前置",
+        .windowMenu: "窗口",
     ]
 
     private static let zhTW: [Key: String] = [
@@ -825,6 +850,13 @@ public enum L10n {
         .commandPaletteOpenFolder: "開啟資料夾\u{2026}",
         .commandPaletteFilePlaceholder: "按名稱搜尋檔案\u{2026}",
         .commandPaletteCommandTitle: "命令面板\u{2026}",
+        .fileOwnedByAnotherWindow: "已在另一視窗開啟",
+        .menuNewWindow: "新增視窗",
+        .menuSaveAs: "另存為\u{2026}",
+        .windowMenuMinimize: "最小化",
+        .windowMenuZoom: "縮放",
+        .windowMenuBringAllToFront: "將全部視窗帶至最前",
+        .windowMenu: "視窗",
     ]
 
     // MARK: - 查找

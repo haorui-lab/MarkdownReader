@@ -39,6 +39,10 @@ final class FileTreeViewModel {
     /// 文档视图模型（弱引用，用于协调重命名/删除/移动时的编辑状态）
     weak var documentViewModel: DocumentViewModel?
 
+    /// 回归修复：持有所属 session（弱引用），使右键菜单等无环境上下文的回调能直接
+    /// 调用本窗口命令目标，不通过 FocusedValue 反查。由 WindowSession.init 注入。
+    weak var session: WindowSession?
+
     /// 文件系统监控器
     private let fileSystemWatcher = FileSystemWatcher()
 
@@ -200,10 +204,19 @@ final class FileTreeViewModel {
         expandedDirs.contains(url)
     }
 
-    /// 选中文件（包括非 .md 文件，以触发错误提示）
+    /// 选中文件（包括非 .md 文件，以触发错误提示）。
+    /// Task 9：经 session.requestFileSelection 路由，所有权冲突时不改选中项。
+    /// 通过 `onSelectFile` 回调交由持有 session 的视图层执行路由，避免 VM 反向依赖 Coordinator。
+    var onSelectFileViaSession: ((URL) -> Void)?
+
     func selectFile(_ node: FileNode) {
         if node.isDirectory { return }
-        selectedFileURL = node.path
+        // 优先经 session 路由（多窗口）；无 session 回调时回退直接赋值（兼容测试/单窗口）。
+        if let route = onSelectFileViaSession {
+            route(node.path)
+        } else {
+            selectedFileURL = node.path
+        }
     }
 
     /// 获取扁平化的可见节点列表（用于键盘导航）

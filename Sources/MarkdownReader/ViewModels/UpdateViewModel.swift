@@ -43,6 +43,12 @@ enum InstallMode: Sendable {
 @Observable
 final class UpdateViewModel {
 
+    // MARK: - 单例（Task 13：应用级更新检查共享一个实例）
+
+    /// 应用级共享实例。MarkdownReaderApp 和 AppStartupCoordinator 使用同一实例，
+    /// 确保自动更新检查与手动检查、更新弹窗状态全局一致。
+    static let shared = UpdateViewModel()
+
     // MARK: - 状态
 
     /// 当前更新检查状态

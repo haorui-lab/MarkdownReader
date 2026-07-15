@@ -66,9 +66,11 @@ struct TrafficLightButtons: View {
 
     // MARK: - 窗口操作
 
+    /// Task 11：红绿灯操作必须作用于它所属的窗口。
+    /// SwiftUI 视图无直接 NSView 句柄，但按钮可点击意味着其所在窗口已成为 key（AppKit 点击会先
+    /// makeKeyAndOrderFront）。因此 NSApp.keyWindow 在红绿灯点击时就是本窗口，无需依赖焦点路由。
+    /// 保留 performClose 以触发 NSWindowDelegate.windowShouldClose（未保存更改提醒）。
     private func closeWindow() {
-        // 使用 performClose 触发 NSWindowDelegate.windowShouldClose 检查
-        // 而非直接 close()，以确保未保存更改提醒生效
         NSApp.keyWindow?.performClose(nil)
     }
 

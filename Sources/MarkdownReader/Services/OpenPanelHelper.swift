@@ -3,21 +3,20 @@ import MarkdownReaderKit
 import UniformTypeIdentifiers
 
 /// 打开面板工具，提供统一的 NSOpenPanel / NSSavePanel 调用逻辑
-/// MarkdownReaderApp（菜单 Cmd+O）和各视图按钮共用
+///
+/// Task 8：`chooseResource`/`chooseDirectory` 改为窗口级 sheet（`beginSheetModal(for:)`），
+/// 不再使用全局 `runModal` + `isPanelShowing` 重入保护。面板状态由各窗口自行维护。
 enum OpenPanelHelper {
 
     /// Markdown 相关的 UTType 列表，用于文件选择面板过滤
     static let markdownContentTypes: [UTType] = {
         var types: [UTType] = []
-        // net.daringfireball.markdown 涵盖 .md/.markdown/.mdown/.mkd
         if let markdownType = UTType("net.daringfireball.markdown") {
             types.append(markdownType)
         }
-        // .txt 作为纯文本，需单独添加
         if let txtType = UTType(filenameExtension: "txt") {
             types.append(txtType)
         }
-        // 回退：逐个添加扩展名（防止 UTType 注册表缺失）
         for ext in ["md", "markdown", "mdown", "mkd"] {
             if let ut = UTType(filenameExtension: ext), !types.contains(ut) {
                 types.append(ut)
@@ -26,22 +25,12 @@ enum OpenPanelHelper {
         return types
     }()
 
-    /// 防止重复弹窗的重入保护
-    /// WindowGroup 可能创建多个 ContentView 实例同时监听通知，
-    /// 即使已改为直接调用，仍保留此保护作为安全网
+    /// 显示打开面板（窗口级 sheet），用户选择后返回 URL。
     @MainActor
-    private(set) static var isPanelShowing = false
-
-    /// 显示打开面板，用户选择后发送对应通知
-    /// - Parameter language: 当前界面语言，用于面板提示文本
-    @MainActor
-    static func show(language: Language) {
-        guard !isPanelShowing else { return }
-        isPanelShowing = true
-
-        // 确保应用在前台，避免 NSOpenPanel 被遮挡
-        NSApp.activate(ignoringOtherApps: true)
-
+    static func chooseResource(
+        for window: NSWindow,
+        language: Language
+    ) async -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
@@ -49,29 +38,23 @@ enum OpenPanelHelper {
         panel.prompt = L10n.tr(.open, language: language)
         panel.allowedContentTypes = [.folder] + Self.markdownContentTypes
 
-        if panel.runModal() == .OK, let url = panel.url {
-            var isDir: ObjCBool = false
-            FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
-
-            if isDir.boolValue {
-                NotificationCenter.default.post(name: .openDirectory, object: url)
-            } else {
-                NotificationCenter.default.post(name: .openFile, object: url)
+        return await withCheckedContinuation { continuation in
+            panel.beginSheetModal(for: window) { response in
+                if response == .OK, let url = panel.url {
+                    continuation.resume(returning: url)
+                } else {
+                    continuation.resume(returning: nil)
+                }
             }
         }
-
-        isPanelShowing = false
     }
 
-    /// 显示打开文件夹面板，仅允许选择目录
-    /// - Parameter language: 当前界面语言，用于面板提示文本
+    /// 显示打开文件夹面板（窗口级 sheet），仅允许选择目录。
     @MainActor
-    static func showDirectory(language: Language) {
-        guard !isPanelShowing else { return }
-        isPanelShowing = true
-
-        NSApp.activate(ignoringOtherApps: true)
-
+    static func chooseDirectory(
+        for window: NSWindow,
+        language: Language
+    ) async -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -79,30 +62,26 @@ enum OpenPanelHelper {
         panel.prompt = L10n.tr(.open, language: language)
         panel.allowedContentTypes = [.folder]
 
-        if panel.runModal() == .OK, let url = panel.url {
-            NotificationCenter.default.post(name: .openDirectory, object: url)
+        return await withCheckedContinuation { continuation in
+            panel.beginSheetModal(for: window) { response in
+                if response == .OK, let url = panel.url {
+                    continuation.resume(returning: url)
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            }
         }
-
-        isPanelShowing = false
     }
 
     /// 显示导出 PDF 面板，让用户选择保存位置
-    /// - Parameters:
-    ///   - language: 当前界面语言
-    ///   - defaultDirectory: 默认定位的目录
-    ///   - suggestedName: 建议的文件名
-    /// - Returns: 用户选择的保存 URL，取消返回 nil
+    /// 回归修复：附着到发起操作的 `window`（窗口级 sheet），不再用应用级 `runModal()`。
     @MainActor
     static func showExportPDFPanel(
+        for window: NSWindow? = nil,
         language: Language,
         defaultDirectory: URL? = nil,
         suggestedName: String = "Untitled.pdf"
-    ) -> URL? {
-        guard !isPanelShowing else { return nil }
-        isPanelShowing = true
-
-        NSApp.activate(ignoringOtherApps: true)
-
+    ) async -> URL? {
         let panel = NSSavePanel()
         panel.prompt = L10n.tr(.exportPDF, language: language)
         panel.allowedContentTypes = [UTType(filenameExtension: "pdf")].compactMap { $0 }
@@ -118,34 +97,35 @@ enum OpenPanelHelper {
             }
         }
 
-        let result: URL?
-        if panel.runModal() == .OK, let url = panel.url {
-            result = url
-        } else {
-            result = nil
+        // 有窗口上下文时作为窗口级 sheet，否则回退应用级（headless/测试）。
+        if let window {
+            return await withCheckedContinuation { continuation in
+                panel.beginSheetModal(for: window) { response in
+                    if response == .OK, let url = panel.url {
+                        continuation.resume(returning: url)
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
+                }
+            }
         }
 
-        isPanelShowing = false
-        return result
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            return url
+        }
+        return nil
     }
 
     /// 显示另存为面板，让用户选择保存位置
-    /// - Parameters:
-    ///   - language: 当前界面语言
-    ///   - defaultDirectory: 默认定位的目录（上次打开文件的位置）
-    ///   - suggestedName: 建议的文件名（如 "Untitled.md"）
-    /// - Returns: 用户选择的保存 URL，取消返回 nil
+    /// 回归修复：附着到发起操作的 `window`（窗口级 sheet），不再用应用级 `runModal()`。
     @MainActor
     static func showSavePanel(
+        for window: NSWindow? = nil,
         language: Language,
         defaultDirectory: URL? = nil,
         suggestedName: String = "Untitled.md"
-    ) -> URL? {
-        guard !isPanelShowing else { return nil }
-        isPanelShowing = true
-
-        NSApp.activate(ignoringOtherApps: true)
-
+    ) async -> URL? {
         let panel = NSSavePanel()
         panel.prompt = L10n.tr(.save, language: language)
         panel.allowedContentTypes = Self.markdownContentTypes
@@ -153,25 +133,31 @@ enum OpenPanelHelper {
         panel.nameFieldStringValue = suggestedName
         panel.canCreateDirectories = true
 
-        // 默认定位到上次打开文件的位置
         if let dir = defaultDirectory {
             var isDir: ObjCBool = false
             if FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir), isDir.boolValue {
                 panel.directoryURL = dir
             } else if dir.pathExtension.isEmpty == false {
-                // 如果是文件 URL，定位到其父目录
                 panel.directoryURL = dir.deletingLastPathComponent()
             }
         }
 
-        let result: URL?
-        if panel.runModal() == .OK, let url = panel.url {
-            result = url
-        } else {
-            result = nil
+        if let window {
+            return await withCheckedContinuation { continuation in
+                panel.beginSheetModal(for: window) { response in
+                    if response == .OK, let url = panel.url {
+                        continuation.resume(returning: url)
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
+                }
+            }
         }
 
-        isPanelShowing = false
-        return result
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            return url
+        }
+        return nil
     }
 }

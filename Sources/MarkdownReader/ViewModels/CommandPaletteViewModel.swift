@@ -40,10 +40,12 @@ final class CommandPaletteViewModel {
 
     // MARK: - 依赖
 
-    var appViewModel: AppViewModel?
-    var fileTreeViewModel: FileTreeViewModel?
-    var documentViewModel: DocumentViewModel?
-    var settings: SettingsModel?
+   var appViewModel: AppViewModel?
+   var fileTreeViewModel: FileTreeViewModel?
+   var documentViewModel: DocumentViewModel?
+   var settings: SettingsModel?
+    weak var coordinator: WindowCoordinator?
+    var windowID: WindowID?
 
     // MARK: - 初始化
 
@@ -112,7 +114,7 @@ final class CommandPaletteViewModel {
             if isDir.boolValue {
                 // 打开目录
                 hide()
-                NotificationCenter.default.post(name: .openDirectory, object: url)
+                coordinator?.enqueue(OpenRequest(url: url, source: .commandPalette, preferredWindowID: windowID))
                 return true
             } else if FileService.isKnownMarkdownExtension(url) {
                 // 打开 Markdown 文件
@@ -134,7 +136,7 @@ final class CommandPaletteViewModel {
                 hide()
                 // 相对路径目录：在文件树中选中该目录下的文件
                 // 或者打开为新的根目录 — 这里选择打开目录
-                NotificationCenter.default.post(name: .openDirectory, object: url)
+                coordinator?.enqueue(OpenRequest(url: url, source: .commandPalette, preferredWindowID: windowID))
                 return true
             } else if FileService.isKnownMarkdownExtension(url) {
                 hide()
@@ -382,11 +384,15 @@ final class CommandPaletteViewModel {
             let resolvedURL = url.resolvingSymlinksInPath()
             let resolvedRootDir = rootDir.resolvingSymlinksInPath()
             if resolvedURL.path.hasPrefix(resolvedRootDir.path + "/") {
-                fileTreeVM.selectedFileURL = url
+                // 回归修复：目录内文件复用与目录树点击同一套窗口内导航规则
+                // （requestFileSelection），所有权冲突时激活 owner、不改本窗口选中项。
+                fileTreeVM.onSelectFileViaSession?(url) ?? {
+                    fileTreeVM.selectedFileURL = url
+                }()
                 return
             }
         }
-        // 不在当前根目录下，通过通知打开
-        NotificationCenter.default.post(name: .openFile, object: url)
+        // 不在当前根目录下，通过 Coordinator 路由（外部打开去重）
+        coordinator?.enqueue(OpenRequest(url: url, source: .commandPalette, preferredWindowID: windowID))
     }
 }

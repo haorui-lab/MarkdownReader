@@ -466,7 +466,28 @@ Buddy Light, Codex Light, Catppuccin Latte, GitHub Light, Gruvbox Light, Kanagaw
 
 - 只读浏览，不支持编辑
 - 不做同步/云端功能
-- 不支持多窗口（首版）
+- Word 式多窗口（v2.2.0）：同一文件不允许多窗口同时存在，再次打开激活已有窗口
+- 不支持同一文件多窗口编辑、标签页/分屏平铺、完整窗口会话恢复
 - 不支持插件系统
 - 最低系统版本：macOS 26.0 (Tahoe)
 - Swift 6.0 严格并发
+
+## 11. 多窗口设计（v2.2.0）
+
+### 11.1 New Window
+
+- 多窗口为受支持行为；Coordinator.openBlankWindow 创建空白窗口。
+- 同一 WindowID 的窗口由 SwiftUI WindowGroup(for: WindowID.self) 复用/前置而非重建。
+- 窗口创建后由 WindowSceneHost 构造 WindowSession 并注入 ContentView。
+
+### 11.2 Window 菜单
+
+- 窗口级菜单命令经 FocusedValues 路由到焦点窗口的 WindowCommandTarget，不广播。
+- 应用级命令（About/检查更新/帮助/清除最近记录）保留应用服务调用。
+- 关闭（Cmd+W）使用 NSApp.keyWindow.performClose 触发 WindowCloseGuard 未保存提醒。
+
+### 11.3 跨窗口所有权冲突标识
+
+- 文件行被「本窗口之外」的窗口持有时，FileRowView 显示 macwindow 图标 + 三语 tooltip「已在另一窗口打开」，不改变行高。
+- 目录窗口点击已被另一窗口持有的文件时：目录窗口选择和文档不变，激活所有者窗口（requestFileSelection → .activateOwner）。
+- 所有者窗口关闭释放所有权后，目录窗口才能选中该文件。

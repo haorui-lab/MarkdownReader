@@ -4,6 +4,8 @@ import MarkdownReaderKit
 /// 空状态占位视图，提示用户打开目录或文件
 struct WelcomeView: View {
     let appViewModel: AppViewModel
+    /// 回归修复：本窗口控件直接调用所属 session 的命令目标，不通过 FocusedValue 反查。
+    let commandTarget: WindowCommandTarget?
     @Environment(\.language) private var language
     @Environment(\.themeColors) private var themeColors
 
@@ -28,7 +30,7 @@ struct WelcomeView: View {
                 .foregroundStyle(themeColors.fgMuted)
 
             Button(L10n.tr(.open, language: language)) {
-                OpenPanelHelper.show(language: language)
+                commandTarget?.perform(.openPanel)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)

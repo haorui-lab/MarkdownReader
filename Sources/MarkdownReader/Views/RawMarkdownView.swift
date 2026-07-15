@@ -17,6 +17,7 @@ struct RawMarkdownView: View {
     /// 内容版本号，变化时强制用 ViewModel 内容覆盖编辑器（阻止回写）
     /// 用于 reload 操作：ViewModel 更新了 content 但 NSTextView 仍持有旧内容
     var contentVersion: Int = 0
+    var undoStore: WindowUndoStore?
     @Environment(\.themeColors) private var themeColors
 
     var body: some View {
@@ -31,7 +32,8 @@ struct RawMarkdownView: View {
             searchRef: searchRef,
             isFindBarVisible: isFindBarVisible,
             onCursorLineNumberChanged: onCursorLineNumberChanged,
-            contentVersion: contentVersion
+            contentVersion: contentVersion,
+            undoStore: undoStore
         )
         .background(themeColors.surface)
     }

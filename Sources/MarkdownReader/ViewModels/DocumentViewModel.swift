@@ -6,6 +6,9 @@ import MarkdownReaderKit
 @Observable
 final class DocumentViewModel {
 
+    /// 窗口级 Undo 存储（Task 10），由 WindowSession 注入。
+    weak var undoStore: WindowUndoStore?
+
     // MARK: - 状态
 
     /// 内容版本号，每次程序化更新（reload/load）时递增
@@ -382,9 +385,9 @@ final class DocumentViewModel {
 
         // 未保存的新建文件需要另存为
         if isUntitled {
-            // 如果保存面板已经在显示，不重复发送通知
-            guard !isSavePanelShowing else { return false }
-            NotificationCenter.default.post(name: .saveAsFile, object: nil)
+            // Task 7：不再 post .saveAsFile 通知。Untitled 保存走 WindowSession.handleSaveAs；
+            // 调用方（菜单/标题栏保存按钮）经 FocusedValues 路由。此处返回 false 表示
+            // 普通 save 未真正落盘，由上层触发 saveAs 流程。
             return false
         }
 
@@ -408,34 +411,42 @@ final class DocumentViewModel {
 
     /// 另存为：将内容保存到用户指定的新位置
     /// - Parameter newURL: 用户选择的新保存位置
-    func saveAs(to newURL: URL) async {
+    /// - Returns: 写入成功返回 `true`；失败返回 `false` 并设置 `fileError`，保留原 Untitled 内容。
+    ///
+    /// 失败时不修改任何状态（不切换 currentFileURL、不清 isUntitled），调用方据此决定是否
+    /// 关闭窗口 / 清未保存标记 / 迁移所有权。副作用只能在成功后执行（见 Task 1 设计）。
+    @discardableResult
+    func saveAs(to newURL: URL) async -> Bool {
+        isSaving = true
+        defer { isSaving = false }
+
+        let oldURL = currentFileURL
         do {
-            isSaving = true
-            defer { isSaving = false }
-
-            let oldURL = currentFileURL
             try await fileService.writeFile(at: newURL, content: content)
-
-            // 清理旧的临时文件
-            if isUntitled, let old = oldURL {
-                try? FileManager.default.removeItem(at: old)
-                contentCache.removeValue(forKey: old)
-                diskContentSnapshot.removeValue(forKey: old)
-            }
-
-            // 更新文件引用
-            currentFileURL = newURL
-            fileName = newURL.lastPathComponent
-            diskContentSnapshot[newURL] = content
-            contentCache[newURL] = content
-            isDirty = false
-            isUntitled = false
-            fileError = nil
-            // 启动对新保存文件的外部变更监控
-            startFileWatcher(for: newURL)
         } catch {
+            // 写入失败：保留原内容与 Untitled 状态，仅呈现错误，不关闭、不清标记
             fileError = .permissionDenied(newURL)
+            return false
         }
+
+        // 清理旧的临时文件
+        if isUntitled, let old = oldURL {
+            try? FileManager.default.removeItem(at: old)
+            contentCache.removeValue(forKey: old)
+            diskContentSnapshot.removeValue(forKey: old)
+        }
+
+        // 更新文件引用
+        currentFileURL = newURL
+        fileName = newURL.lastPathComponent
+        diskContentSnapshot[newURL] = content
+        contentCache[newURL] = content
+        isDirty = false
+        isUntitled = false
+        fileError = nil
+        // 启动对新保存文件的外部变更监控
+        startFileWatcher(for: newURL)
+        return true
     }
 
     /// 检查内容是否与磁盘快照不同，更新脏状态
@@ -599,7 +610,7 @@ final class DocumentViewModel {
                 // 递增版本号，通知视图层刷新
                 contentVersion += 1
                 // 清空 undo 栈：内容已被外部替换，旧 undo 历史已无意义
-                UndoManagerProvider.shared.undoManager(for: url)?.removeAllActions()
+                undoStore?.undoManager(for: url)?.removeAllActions()
             } else {
                 // 用户有修改，显示刷新按钮
                 isFileModifiedExternally = true
@@ -625,7 +636,7 @@ final class DocumentViewModel {
             isDirty = false
             outlineItems = OutlineService.parse(diskContent)
             // 清空 undo 栈：reload 意味着放弃当前修改回到磁盘状态，旧 undo 历史已无意义
-            UndoManagerProvider.shared.undoManager(for: url)?.removeAllActions()
+            undoStore?.undoManager(for: url)?.removeAllActions()
             // 递增版本号，强制通知视图层刷新
             // 即使磁盘内容与当前 content 相同，视图也需要重新渲染
             contentVersion += 1

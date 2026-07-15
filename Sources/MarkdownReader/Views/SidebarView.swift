@@ -6,6 +6,10 @@ struct SidebarView: View {
     let fileTreeViewModel: FileTreeViewModel
     let appViewModel: AppViewModel
     let documentViewModel: DocumentViewModel
+    /// Task 9：用于跨窗口所有权标记（文件行「已在另一窗口打开」）。
+    let session: WindowSession
+    /// 回归修复：本窗口控件直接调用所属 session 的命令目标，不通过 FocusedValue 反查。
+    let commandTarget: WindowCommandTarget?
     @Environment(\.language) private var language
     @Environment(\.themeColors) private var themeColors
 
@@ -29,10 +33,11 @@ struct SidebarView: View {
                 .help(L10n.tr(.titleBarToggleSidebar, language: language))
                 .padding(.leading, 8)
 
-                // 打开按钮（与菜单 Cmd+O 功能一致，直接调用避免 WindowGroup 多实例重复弹窗）
-                Button {
-                    OpenPanelHelper.show(language: language)
-                } label: {
+               // 打开按钮（与菜单 Cmd+O 功能一致，直接调用避免 WindowGroup 多实例重复弹窗）
+               Button {
+                    // 回归修复：直接调用本窗口命令目标，不通过 FocusedValue 反查。
+                    commandTarget?.perform(.openPanel)
+               } label: {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(themeColors.fgSecondary)
@@ -43,7 +48,8 @@ struct SidebarView: View {
 
                 // 新建文件按钮
                 Button {
-                    NotificationCenter.default.post(name: .newFile, object: nil)
+                    // 回归修复：直接调用本窗口命令目标，不通过 FocusedValue 反查。
+                    commandTarget?.perform(.newFile)
                 } label: {
                     Image(systemName: "doc.badge.plus")
                         .font(.system(size: 14))
@@ -83,6 +89,7 @@ struct SidebarView: View {
         List {
             if let url = appViewModel.singleFileURL {
                 Button {
+                    // Task 9：单文件模式下文件即本窗口资源，直接选择。
                     fileTreeViewModel.selectedFileURL = url
                 } label: {
                     HStack(spacing: 8) {
@@ -119,7 +126,7 @@ struct SidebarView: View {
     private var directoryTreeView: some View {
         List {
             ForEach(fileTreeViewModel.nodes) { node in
-                FileNodeRow(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
+                FileNodeRow(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel, session: session)
             }
         }
         .listStyle(.sidebar)
@@ -209,6 +216,8 @@ struct FileNodeRow: View {
     let node: FileNode
     let fileTreeViewModel: FileTreeViewModel
     let documentViewModel: DocumentViewModel
+    /// Task 9：用于跨窗口所有权标记。目录行不使用，但文件行需要。
+    let session: WindowSession
     @Environment(\.themeColors) private var themeColors
     @Environment(\.language) private var language
 
@@ -241,10 +250,10 @@ struct FileNodeRow: View {
                 )
             ) {
                 ForEach(children) { child in
-                    FileNodeRow(node: child, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
+                    FileNodeRow(node: child, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel, session: session)
                 }
             } label: {
-                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
+                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel, session: session)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         // 点击目录标签区域切换展开/折叠
@@ -258,7 +267,7 @@ struct FileNodeRow: View {
             Button {
                 fileTreeViewModel.selectFile(node)
             } label: {
-                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel)
+                FileRowView(node: node, fileTreeViewModel: fileTreeViewModel, documentViewModel: documentViewModel, session: session)
             }
             .buttonStyle(.plain)
             .contentShape(Rectangle())
@@ -322,7 +331,8 @@ struct FileNodeRow: View {
     private var fileContextMenu: some View {
         // 重新加载：仅对当前打开且被外部修改的文件可用
         Button {
-            NotificationCenter.default.post(name: .reloadFile, object: nil)
+            // 回归修复：直接调用本窗口命令目标，不通过 FocusedValue 反查。
+            fileTreeViewModel.session?.commandTarget.perform(.reloadFile)
         } label: {
             Label(L10n.tr(.contextMenuReload, language: language), systemImage: "arrow.clockwise")
         }
