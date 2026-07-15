@@ -384,14 +384,15 @@ final class CommandPaletteViewModel {
             let resolvedURL = url.resolvingSymlinksInPath()
             let resolvedRootDir = rootDir.resolvingSymlinksInPath()
             if resolvedURL.path.hasPrefix(resolvedRootDir.path + "/") {
-                // Task 9：目录内文件经 session 路由选择（所有权冲突时激活 owner）。
+                // 回归修复：目录内文件复用与目录树点击同一套窗口内导航规则
+                // （requestFileSelection），所有权冲突时激活 owner、不改本窗口选中项。
                 fileTreeVM.onSelectFileViaSession?(url) ?? {
                     fileTreeVM.selectedFileURL = url
                 }()
                 return
             }
         }
-        // 不在当前根目录下，通过通知打开
+        // 不在当前根目录下，通过 Coordinator 路由（外部打开去重）
         coordinator?.enqueue(OpenRequest(url: url, source: .commandPalette, preferredWindowID: windowID))
     }
 }

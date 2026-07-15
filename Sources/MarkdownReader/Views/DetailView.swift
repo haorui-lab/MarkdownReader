@@ -36,6 +36,12 @@ struct DetailView: View {
     var undoStore: WindowUndoStore?
     /// Task 11：导出 PDF / 另存面板以所属窗口为 sheet 宿主，避免抢夺其它窗口焦点。
     var owningWindow: NSWindow?
+    /// 回归修复：本窗口命令目标（由 WindowSceneHost 发布并注入）。视图层直接在其上
+    /// 注册 PDF/查找/重新加载/缩放 handler，不再发布独立 focusedSceneValue 覆盖焦点路由，
+    /// 也不在按钮 closure 内临时 @FocusedValue 反查。
+    var commandTarget: WindowCommandTarget?
+    /// 回归修复：所属 session，用于 Markdown 内链按目录内/外部规则路由（需求 §6.7）。
+    weak var session: WindowSession?
     @Environment(\.language) private var language
     @Environment(\.themeColors) private var themeColors
 
@@ -111,6 +117,15 @@ struct DetailView: View {
         ) {
             Button(L10n.tr(.confirm, language: language), role: .cancel) {}
         }
+        // 回归修复：注册 UI 上下文 handler 到本窗口命令目标（替代覆盖式 focusedSceneValue）。
+        .onAppear { registerCommandHandlers() }
+        .onChange(of: commandTarget?.objectIdentifier) { _, _ in registerCommandHandlers() }
+        .onDisappear {
+            // 视图退出：清理 handler，避免残留回调指向已销毁视图。
+            commandTarget?.findHandler = nil
+            commandTarget?.reloadHandler = nil
+            commandTarget?.exportPDFHandler = nil
+        }
     }
 
     // MARK: - TitleBar
@@ -134,8 +149,8 @@ struct DetailView: View {
                 .padding(.leading, 8)
 
                Button {
-                    @FocusedValue(\.windowCommandTarget) var target
-                    target?.perform(.openPanel)
+                    // 回归修复：直接调用本窗口命令目标，不通过 FocusedValue 反查。
+                    commandTarget?.perform(.openPanel)
                } label: {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 14))
@@ -147,9 +162,8 @@ struct DetailView: View {
 
                 // 新建文件按钮（始终可用，无需打开目录）
                 Button {
-                    // Task 7：经焦点窗口命令目标路由，不广播。
-                    @FocusedValue(\.windowCommandTarget) var target
-                    target?.perform(.newFile)
+                    // 回归修复：直接调用本窗口命令目标，不通过 FocusedValue 反查。
+                    commandTarget?.perform(.newFile)
                 } label: {
                     Image(systemName: "doc.badge.plus")
                         .font(.system(size: 14))
@@ -227,9 +241,8 @@ struct DetailView: View {
                 // 保存按钮（在渲染模式切换右侧）
                 if documentViewModel.hasDocument {
                     Button {
-                        // Task 7：经焦点窗口命令目标路由，不广播。
-                        @FocusedValue(\.windowCommandTarget) var target
-                        target?.perform(.save)
+                        // 回归修复：直接调用本窗口命令目标，不通过 FocusedValue 反查。
+                        commandTarget?.perform(.save)
                     } label: {
                         Image(systemName: "arrow.down.doc.fill")
                             .font(.system(size: 14))
@@ -312,7 +325,7 @@ struct DetailView: View {
         if documentViewModel.hasDocument {
             documentContentWithOutline
         } else if appViewModel.rootDirectory == nil && !appViewModel.isSingleFileMode {
-            WelcomeView(appViewModel: appViewModel)
+            WelcomeView(appViewModel: appViewModel, commandTarget: commandTarget)
         } else if let error = documentViewModel.fileError {
             ErrorView(
                 icon: "exclamationmark.triangle",
@@ -373,15 +386,15 @@ struct DetailView: View {
         let suggestedName = stem.isEmpty ? "Untitled.pdf" : "\(stem).pdf"
         let defaultDir = settings.lastOpenedDirectory
             ?? documentViewModel.currentFileURL?.deletingLastPathComponent()
-
-       guard let saveURL = OpenPanelHelper.showExportPDFPanel(
-            for: owningWindow,
-            language: language,
-           defaultDirectory: defaultDir,
-           suggestedName: suggestedName
-       ) else { return }
+        let hostWindow = owningWindow
 
         Task {
+            guard let saveURL = await OpenPanelHelper.showExportPDFPanel(
+                for: hostWindow,
+                language: language,
+                defaultDirectory: defaultDir,
+                suggestedName: suggestedName
+            ) else { return }
             await exportPDF(to: saveURL)
         }
     }
@@ -609,6 +622,10 @@ struct DetailView: View {
                     onVisibleLineChanged: { lineNumber in
                         documentViewModel.renderedVisibleLineNumber = lineNumber
                     },
+                    commandTarget: commandTarget,
+                    onOpenLinkedMarkdownFile: { [weak session] url in
+                        session?.handleLinkedMarkdownFile(url.standardizedFileURL)
+                    },
                     exportedPage: $exportedPage
                 )
                 .onChange(of: documentViewModel.scrollToLineRequest) { _, newValue in
@@ -641,20 +658,16 @@ struct DetailView: View {
         .onChange(of: findReplaceViewModel.isCaseSensitive) { _, _ in performSearch() }
         .onChange(of: findReplaceViewModel.isWholeWord) { _, _ in performSearch() }
         .onChange(of: findReplaceViewModel.isRegularExpression) { _, _ in performSearch() }
-        // Task 7：查找命令经 FocusedValues 路由到本窗口。DetailView 注入自身的
-        // 命令目标到环境，使 find/reload/exportPDF 等 UI 上下文命令能命中本视图。
-        .focusedSceneValue(\.windowCommandTarget, makeCommandTarget())
     }
 
-    /// 构造本 DetailView 的命令目标，注册 find/reload/exportPDF 等 UI 上下文 handler。
-    /// 注意：此 target 与 WindowSceneHost 发布的 session.commandTarget 是同一焦点键；
-    /// SwiftUI 后注册的会覆盖前者。为避免覆盖焦点路由，DetailView 不发布独立 target，
-    /// 而是把 handler 挂到环境中的 target 上。因此这里读取环境 target 并回填 handler。
-    @MainActor
-    private func makeCommandTarget() -> WindowCommandTarget {
-        // 取环境中的焦点 target（由 WindowSceneHost 发布，绑定本窗口 session）
-        @FocusedValue(\.windowCommandTarget) var envTarget
-        let target = envTarget ?? WindowCommandTarget(session: nil)
+    /// 把 find/reload/exportPDF handler 注册到注入的本窗口命令目标上。
+    ///
+    /// 回归修复根因 1：DetailView 不再发布独立 `focusedSceneValue(\.windowCommandTarget, …)`
+    /// 覆盖 `WindowSceneHost` 的 scene 级发布（覆盖会让无 session 的临时 target 抢占
+    /// 焦点路由）。handler 直接挂到由 WindowSceneHost 注入、绑定本 session 的 target 上；
+    /// 视图重建时 handler 自然更新，session 释放后 target 变 no-op。
+    private func registerCommandHandlers() {
+        guard let target = commandTarget else { return }
         target.findHandler = { cmd in
             switch cmd {
             case .find: openFindBar()
@@ -665,6 +678,5 @@ struct DetailView: View {
         }
         target.reloadHandler = { handleReloadButtonTapped() }
         target.exportPDFHandler = { exportPDF() }
-        return target
     }
 }

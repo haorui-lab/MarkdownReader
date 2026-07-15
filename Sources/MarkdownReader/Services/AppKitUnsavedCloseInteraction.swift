@@ -40,9 +40,9 @@ final class AppKitUnsavedCloseInteraction: UnsavedCloseInteraction {
         for session: WindowSession,
         suggestedName: String,
         defaultDirectory: URL?
-    ) -> URL? {
+    ) async -> URL? {
         let language = SettingsModel.shared.languagePref.resolvedLanguage
-        return OpenPanelHelper.showSavePanel(
+        return await OpenPanelHelper.showSavePanel(
             for: session.window,
             language: language,
             defaultDirectory: defaultDirectory,

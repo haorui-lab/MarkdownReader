@@ -8,6 +8,8 @@ struct SidebarView: View {
     let documentViewModel: DocumentViewModel
     /// Task 9：用于跨窗口所有权标记（文件行「已在另一窗口打开」）。
     let session: WindowSession
+    /// 回归修复：本窗口控件直接调用所属 session 的命令目标，不通过 FocusedValue 反查。
+    let commandTarget: WindowCommandTarget?
     @Environment(\.language) private var language
     @Environment(\.themeColors) private var themeColors
 
@@ -33,9 +35,8 @@ struct SidebarView: View {
 
                // 打开按钮（与菜单 Cmd+O 功能一致，直接调用避免 WindowGroup 多实例重复弹窗）
                Button {
-                    // Task 8：经焦点窗口命令目标路由到窗口级 OpenPanel sheet
-                    @FocusedValue(\.windowCommandTarget) var target
-                    target?.perform(.openPanel)
+                    // 回归修复：直接调用本窗口命令目标，不通过 FocusedValue 反查。
+                    commandTarget?.perform(.openPanel)
                } label: {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 14))
@@ -47,9 +48,8 @@ struct SidebarView: View {
 
                 // 新建文件按钮
                 Button {
-                    // Task 7：经焦点窗口命令目标路由，不广播。
-                    @FocusedValue(\.windowCommandTarget) var target
-                    target?.perform(.newFile)
+                    // 回归修复：直接调用本窗口命令目标，不通过 FocusedValue 反查。
+                    commandTarget?.perform(.newFile)
                 } label: {
                     Image(systemName: "doc.badge.plus")
                         .font(.system(size: 14))
@@ -331,9 +331,8 @@ struct FileNodeRow: View {
     private var fileContextMenu: some View {
         // 重新加载：仅对当前打开且被外部修改的文件可用
         Button {
-            // Task 7：经焦点窗口命令目标路由，不广播。
-            @FocusedValue(\.windowCommandTarget) var target
-            target?.perform(.reloadFile)
+            // 回归修复：直接调用本窗口命令目标，不通过 FocusedValue 反查。
+            fileTreeViewModel.session?.commandTarget.perform(.reloadFile)
         } label: {
             Label(L10n.tr(.contextMenuReload, language: language), systemImage: "arrow.clockwise")
         }

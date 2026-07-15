@@ -132,37 +132,92 @@ struct MarkdownReaderApp: App {
             CommandGroup(after: .newItem) {
                 openRecentMenu
             }
+
+            // 回归修复（需求 §7.3 / MW-11）：补全标准 Window 菜单——列出主窗口、
+            // 激活目标窗口，并保留 Minimize / Zoom / Bring All to Front。
+            CommandGroup(replacing: .windowList) {
+                windowListMenu
+            }
+            CommandGroup(replacing: .windowArrangement) {
+                standardWindowArrangementMenu
+            }
         }
+    }
+
+    // MARK: - Window 菜单
+
+    /// Window 菜单：列出所有可见主窗口，点击激活对应窗口。
+    @ViewBuilder
+    private var windowListMenu: some View {
+        let visible = windowCoordinator.visibleWindowIDs()
+        if visible.isEmpty {
+            Text(L10n.tr(.openRecentEmpty, language: language))
+                .disabled(true)
+        } else {
+            ForEach(visible, id: \.rawValue) { windowID in
+                Button(windowTitle(for: windowID)) {
+                    windowCoordinator.activate(windowID: windowID)
+                }
+            }
+        }
+    }
+
+    /// 标准窗口排列项：Minimize / Zoom / Bring All to Front。
+    @ViewBuilder
+    private var standardWindowArrangementMenu: some View {
+        Button(L10n.tr(.windowMenuMinimize, language: language)) {
+            NSApp.keyWindow?.miniaturize(nil)
+        }
+        .keyboardShortcut("m", modifiers: .command)
+        .disabled(NSApp.keyWindow == nil)
+
+        Button(L10n.tr(.windowMenuZoom, language: language)) {
+            NSApp.keyWindow?.zoom(nil)
+        }
+        .disabled(NSApp.keyWindow == nil)
+
+        Divider()
+
+        Button(L10n.tr(.windowMenuBringAllToFront, language: language)) {
+            NSApp.arrangeInFront(nil)
+        }
+    }
+
+    /// 返回某窗口在 Window 菜单中的显示标题（区分文件/目录/Untitled）。
+    private func windowTitle(for windowID: WindowID) -> String {
+        guard let session = windowCoordinator.sessions[windowID] else {
+            return "Markdown Reader"
+        }
+        let appVM = session.appViewModel
+        let docVM = session.documentViewModel
+        if docVM.isUntitled {
+            return docVM.fileName.isEmpty ? "Untitled" : docVM.fileName
+        }
+        if appVM.isSingleFileMode, let url = appVM.singleFileURL {
+            return url.lastPathComponent
+        }
+        if let dir = appVM.rootDirectory {
+            return dir.lastPathComponent
+        }
+        if let url = docVM.currentFileURL {
+            return url.lastPathComponent
+        }
+        return "Markdown Reader"
     }
 }
 
 // MARK: - Notification Names
 
 extension Notification.Name {
-    static let toggleSidebar = Notification.Name("com.markdownreader.toggleSidebar")
-    static let switchToRendered = Notification.Name("com.markdownreader.switchToRendered")
-    static let switchToRaw = Notification.Name("com.markdownreader.switchToRaw")
-    static let openDirectory = Notification.Name("com.markdownreader.openDirectory")
-    static let openFile = Notification.Name("com.markdownreader.openFile")
-    static let openLinkedMarkdownFile = Notification.Name("com.markdownreader.openLinkedMarkdownFile")
-    static let toggleSettings = Notification.Name("com.markdownreader.toggleSettings")
-    static let newFile = Notification.Name("com.markdownreader.newFile")
-    static let saveFile = Notification.Name("com.markdownreader.saveFile")
-    static let saveAsFile = Notification.Name("com.markdownreader.saveAsFile")
-    static let reloadFile = Notification.Name("com.markdownreader.reloadFile")
-    static let clearRecentItems = Notification.Name("com.markdownreader.clearRecentItems")
+    // 回归修复：多窗口改造后窗口级命令已迁移到 FocusedValues（WindowCommandTarget）或
+    // 所属 session 直接调用，不再使用全局 NotificationCenter 广播。下面仅保留仍有合法
+    // 调用方的应用级 / 跨场景通知；已失去调用方的窗口级广播常量已删除，避免后续误用。
+
+    /// 恢复上次打开位置（冷启动由 AppDelegate 发起，所有窗口监听，但仅无资源的窗口响应）。
     static let restoreLastLocation = Notification.Name("com.markdownreader.restoreLastLocation")
+    /// 重置到欢迎页（Dock 重开等场景）。
     static let resetToWelcome = Notification.Name("com.markdownreader.resetToWelcome")
+    /// 应用级：检查更新（菜单触发，UpdateViewModel 监听）。
     static let checkForUpdates = Notification.Name("com.markdownreader.checkForUpdates")
-    static let findInDocument = Notification.Name("com.markdownreader.findInDocument")
-    static let findNext = Notification.Name("com.markdownreader.findNext")
-    static let findPrevious = Notification.Name("com.markdownreader.findPrevious")
-    static let findAndReplace = Notification.Name("com.markdownreader.findAndReplace")
-    static let exportPDF = Notification.Name("com.markdownreader.exportPDF")
-    static let dragHoverChanged = Notification.Name("com.markdownreader.dragHoverChanged")
-    static let unsupportedFileTypeDropped = Notification.Name("com.markdownreader.unsupportedFileTypeDropped")
-    static let zoomIn = Notification.Name("com.markdownreader.zoomIn")
-    static let zoomOut = Notification.Name("com.markdownreader.zoomOut")
-    static let zoomReset = Notification.Name("com.markdownreader.zoomReset")
-    static let toggleCommandPalette = Notification.Name("com.markdownreader.toggleCommandPalette")
 }
+

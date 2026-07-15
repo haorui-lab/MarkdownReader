@@ -21,7 +21,7 @@ protocol UnsavedCloseInteraction {
     func presentUnsavedChangesPrompt(for session: WindowSession) -> UnsavedPromptChoice
 
     /// 选择 Save As 目标 URL。用户取消返回 nil。
-    func chooseSaveAsTarget(for session: WindowSession, suggestedName: String, defaultDirectory: URL?) -> URL?
+    func chooseSaveAsTarget(for session: WindowSession, suggestedName: String, defaultDirectory: URL?) async -> URL?
 }
 
 /// 「保存 / 不保存 / 取消」三选一。
@@ -67,7 +67,7 @@ final class UnsavedDocumentCloseCoordinator {
             let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
             let suggestedName = doc.fileName.isEmpty ? "Untitled.md" : doc.fileName
 
-            guard let saveURL = interaction.chooseSaveAsTarget(
+            guard let saveURL = await interaction.chooseSaveAsTarget(
                 for: session,
                 suggestedName: suggestedName,
                 defaultDirectory: defaultDir

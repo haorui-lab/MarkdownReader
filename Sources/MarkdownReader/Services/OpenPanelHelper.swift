@@ -74,15 +74,14 @@ enum OpenPanelHelper {
     }
 
     /// 显示导出 PDF 面板，让用户选择保存位置
+    /// 回归修复：附着到发起操作的 `window`（窗口级 sheet），不再用应用级 `runModal()`。
     @MainActor
     static func showExportPDFPanel(
         for window: NSWindow? = nil,
         language: Language,
         defaultDirectory: URL? = nil,
         suggestedName: String = "Untitled.pdf"
-    ) -> URL? {
-        NSApp.activate(ignoringOtherApps: true)
-
+    ) async -> URL? {
         let panel = NSSavePanel()
         panel.prompt = L10n.tr(.exportPDF, language: language)
         panel.allowedContentTypes = [UTType(filenameExtension: "pdf")].compactMap { $0 }
@@ -98,25 +97,35 @@ enum OpenPanelHelper {
             }
         }
 
-        let result: URL?
-        if panel.runModal() == .OK, let url = panel.url {
-            result = url
-        } else {
-            result = nil
+        // 有窗口上下文时作为窗口级 sheet，否则回退应用级（headless/测试）。
+        if let window {
+            return await withCheckedContinuation { continuation in
+                panel.beginSheetModal(for: window) { response in
+                    if response == .OK, let url = panel.url {
+                        continuation.resume(returning: url)
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
+                }
+            }
         }
-        return result
+
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            return url
+        }
+        return nil
     }
 
     /// 显示另存为面板，让用户选择保存位置
+    /// 回归修复：附着到发起操作的 `window`（窗口级 sheet），不再用应用级 `runModal()`。
     @MainActor
     static func showSavePanel(
         for window: NSWindow? = nil,
         language: Language,
         defaultDirectory: URL? = nil,
         suggestedName: String = "Untitled.md"
-    ) -> URL? {
-        NSApp.activate(ignoringOtherApps: true)
-
+    ) async -> URL? {
         let panel = NSSavePanel()
         panel.prompt = L10n.tr(.save, language: language)
         panel.allowedContentTypes = Self.markdownContentTypes
@@ -133,12 +142,22 @@ enum OpenPanelHelper {
             }
         }
 
-        let result: URL?
-        if panel.runModal() == .OK, let url = panel.url {
-            result = url
-        } else {
-            result = nil
+        if let window {
+            return await withCheckedContinuation { continuation in
+                panel.beginSheetModal(for: window) { response in
+                    if response == .OK, let url = panel.url {
+                        continuation.resume(returning: url)
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
+                }
+            }
         }
-        return result
+
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            return url
+        }
+        return nil
     }
 }

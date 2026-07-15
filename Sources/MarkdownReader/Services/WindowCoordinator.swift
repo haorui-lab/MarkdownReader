@@ -70,6 +70,9 @@ final class WindowCoordinator {
     private let routingEngine: WindowRoutingEngine
     private var openWindowAction: OpenWindowAction?
 
+    /// 回归修复：暴露给 WindowSession 做目录内导航的 identity 解析（与所有权判断同源）。
+    var sharedIdentityService: ResourceIdentityService { identityService }
+
     /// 测试用：注入窗口创建闭包。生产路径走 `OpenWindowAction`。
     /// 仅当 `openWindowAction == nil` 时生效，使无真实 action 的测试也能完成 createWindow 决策。
     var windowCreationClosureForTesting: ((WindowID) -> Void)?
@@ -111,6 +114,21 @@ final class WindowCoordinator {
             return true
         }
         return false
+    }
+
+    /// 回归修复：文件是否由指定 windowID 自身持有（目录内导航幂等判断）。
+    func isFileOwnedBySelf(_ url: URL, owner windowID: WindowID) -> Bool {
+        guard let identity = try? identityService.identity(for: url, kind: .file) else {
+            return false
+        }
+        return resourceOwners[identity] == windowID
+    }
+
+    /// 回归修复：释放某窗口对指定文件 URL 的所有权（目录内导航切换旧文件时调用）。
+    /// 不影响该窗口的根目录所有权。不可识别身份或非本窗口持有时为 no-op。
+    func releaseFileOwnership(_ url: URL, for windowID: WindowID) {
+        guard let identity = try? identityService.identity(for: url, kind: .file) else { return }
+        release(identity, for: windowID)
     }
 
     /// 当前是否存在任何空白会话。

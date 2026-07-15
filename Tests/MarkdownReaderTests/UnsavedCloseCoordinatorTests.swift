@@ -26,7 +26,7 @@ final class UnsavedCloseCoordinatorTests: TemporaryDirectoryTestCase {
             for session: WindowSession,
             suggestedName: String,
             defaultDirectory: URL?
-        ) -> URL? {
+        ) async -> URL? {
             saveTarget
         }
     }
@@ -258,7 +258,7 @@ final class SequentialSaveInteraction: UnsavedCloseInteraction {
         for session: WindowSession,
         suggestedName: String,
         defaultDirectory: URL?
-    ) -> URL? {
+    ) async -> URL? {
         guard callIndex < targets.count else { return nil }
         let url = targets[callIndex]
         callIndex += 1

@@ -21,6 +21,9 @@ final class WindowCommandTarget {
         self.session = session
     }
 
+    /// 用于 SwiftUI `onChange` 追踪 target 身份变化（窗口切换时重注册 handler）。
+    var objectIdentifier: ObjectIdentifier { ObjectIdentifier(self) }
+
     /// 执行窗口级命令。session 已释放时为 no-op。
     func perform(_ command: WindowCommand) {
         guard let session else { return }

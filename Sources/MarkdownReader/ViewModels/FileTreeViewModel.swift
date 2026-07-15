@@ -39,6 +39,10 @@ final class FileTreeViewModel {
     /// 文档视图模型（弱引用，用于协调重命名/删除/移动时的编辑状态）
     weak var documentViewModel: DocumentViewModel?
 
+    /// 回归修复：持有所属 session（弱引用），使右键菜单等无环境上下文的回调能直接
+    /// 调用本窗口命令目标，不通过 FocusedValue 反查。由 WindowSession.init 注入。
+    weak var session: WindowSession?
+
     /// 文件系统监控器
     private let fileSystemWatcher = FileSystemWatcher()
 

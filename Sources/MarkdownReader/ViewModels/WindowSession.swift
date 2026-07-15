@@ -34,6 +34,15 @@ final class WindowSession {
     weak var coordinator: WindowCoordinator?
     weak var window: NSWindow?
 
+    /// 回归修复：测试注入的终止协调器（携带 fake 交互边界），供 handleNewFile /
+    /// handleLinkedMarkdownFile 复用保存确认流程。生产环境为 nil，回退到
+    /// `AppDelegate.sharedTerminationCoordinator`。
+    var terminationCoordinatorForTesting: ApplicationTerminationCoordinator?
+
+    /// 回归修复：测试注入的 Save As 面板选择闭包，避免 headless 环境调真实
+    /// `OpenPanelHelper.showSavePanel`（runModal 会阻塞主线程）。生产环境为 nil，走真实窗口级 sheet。
+    var savePanelChooserForTesting: ((URL?, String) async -> URL?)?
+
     // MARK: - 窗口级状态
 
     /// 显式空白标记（发现 3：消除派生 isBlank 的竞态窗口）。
@@ -85,6 +94,7 @@ final class WindowSession {
 
         // 连接 ViewModel 间依赖（原 ContentView.task 中的逻辑）
         self.fileTreeViewModel.documentViewModel = documentViewModel
+        self.fileTreeViewModel.session = self
        self.commandPaletteViewModel.configure(
            appViewModel: appViewModel,
            fileTreeViewModel: fileTreeViewModel,
@@ -151,8 +161,19 @@ final class WindowSession {
         settings.recordLastOpened(file: file, directory: directory, isActive: isLastActiveWindow)
     }
 
-    /// 用户在目录树点击文件前的路由。
-    /// 若文件已被其他窗口持有，**不修改** selectedFileURL，激活 owner 窗口。
+    /// 用户在目录树点击文件前的路由（回归修复：目录窗口专用文件切换事务）。
+    ///
+    /// 目录内文件选择**不进入通用外部打开路由**（`routeFileSelection`/`enqueue`），
+    /// 否则已承载根目录的非空白窗口会被路由引擎判为 `.createWindow`，错误地新建窗口。
+    /// 改为按产品需求 §6.5 在当前目录窗口内执行文件切换事务：
+    ///
+    /// 1. 目标文件已由本窗口持有：幂等，不重复加载。
+    /// 2. 目标文件由其他窗口持有：保持当前选中项与文档不变，激活 owner 窗口。
+    /// 3. 目标文件无其他 owner：在当前窗口打开。
+    ///    - 为当前 session 声明目标文件所有权；
+    ///    - 释放此前在该目录窗口显示的文件所有权（保留根目录所有权）；
+    ///    - 更新文件树选择并加载文档。
+    /// 所有权声明、旧文件释放、选中项切换作为同一主线程事务完成。
     func requestFileSelection(_ url: URL) {
         guard let coordinator else {
             // 无 coordinator 时回退为直接选择（兼容旧测试/单窗口）
@@ -160,20 +181,144 @@ final class WindowSession {
             return
         }
 
-        let decision = coordinator.routeFileSelection(url, from: id)
-        switch decision {
-        case .openInSession:
+        let resource: ResourceIdentity
+        do {
+            resource = try coordinator.sharedIdentityService.identity(for: url, kind: .file)
+        } catch {
+            // 类型不支持：不改选中项
+            return
+        }
+
+        // 1. 本窗口已持有该文件：幂等。
+        if coordinator.isFileOwnedBySelf(url, owner: id) {
+            return
+        }
+
+        // 2. 其他窗口持有该文件：不改本窗口选中项/文档，激活 owner。
+        if coordinator.isFileOwnedByAnotherWindow(url, besides: id) {
+            if let ownerID = coordinator.owner(of: resource) {
+                coordinator.activate(windowID: ownerID)
+            }
+            return
+        }
+
+        // 3. 无其他 owner：在当前目录窗口内打开（目录内导航专用路径）。
+        openFileInDirectoryWindow(url: url, resource: resource)
+    }
+
+    /// 目录窗口内文件切换事务（无其他 owner 分支）。
+    ///
+    /// 职责划分（与原 `.openInSession` 设计一致）：session 负责所有权事务与选中项切换，
+    /// **文档加载由视图层 `SelectionChangeModifier` 响应 `selectedFileURL` 变化完成**。
+    /// 因此本方法不直接 `loadFile`——否则会与视图层 `onChange` 双重加载，且脏 Untitled 时
+    /// 视图的 `runModal` 保存弹窗会阻塞主 actor，cancel 后 session 的延迟加载仍会覆盖取消结果。
+    ///
+    /// 脏 Untitled 时只切换选中项，交由视图层弹「保存/不保存/取消」并加载；本方法不声明
+    /// 所有权，避免用户取消后留下错误 owner。
+    private func openFileInDirectoryWindow(url: URL, resource: ResourceIdentity) {
+        guard let coordinator else {
             fileTreeViewModel.selectedFileURL = url
-        case .activateOwner(let ownerID, _):
-            // 关键约束：不修改 selectedFileURL，避免抢先加载造成双所有权。
-            coordinator.activate(windowID: ownerID)
-        case .createWindow(let newID, let resource):
-            // 目录窗口已承载目录 → 为该文件创建新窗口（理论上目录树内导航不应触发，
-            // 但保留分支以防空白窗口误用）。
-            coordinator.openResourceInNewWindow(resource)
-            _ = newID
-        case .reject:
-            break
+            return
+        }
+
+        // 脏 Untitled：交由视图层 SelectionChangeModifier 处理保存确认 + 加载。
+        // 此处仅切换选中项，不声明所有权/不加载，避免与保存弹窗竞态。
+        if documentViewModel.isUntitled && documentViewModel.isDirty {
+            fileTreeViewModel.selectedFileURL = url
+            return
+        }
+
+        // 声明目标所有权（若被并发抢占则放弃，不改选中项）
+        do {
+            try coordinator.claim(resource, for: id)
+        } catch {
+            // 并发抢占：激活实际 owner，保持本窗口状态不变
+            if let ownerID = coordinator.owner(of: resource) {
+                coordinator.activate(windowID: ownerID)
+            }
+            return
+        }
+
+        // 释放此前在本目录窗口显示的文件所有权（保留根目录所有权）。
+        if let oldFileURL = documentViewModel.currentFileURL,
+           !documentViewModel.isUntitled,
+           oldFileURL.standardizedFileURL != url.standardizedFileURL {
+            coordinator.releaseFileOwnership(oldFileURL, for: id)
+        }
+
+        // 切换选中项；文档加载由视图层 SelectionChangeModifier 响应变化完成。
+        fileTreeViewModel.selectedFileURL = url
+    }
+
+    // MARK: - Markdown 内链打开（需求 §6.7，回归修复：移除全局广播）
+
+    /// 渲染页内点击本地 Markdown 链接时由所属 WebView closure 回调本方法。
+    /// 只由来源窗口处理：根目录内文件走目录内导航，外部文件首期仍在当前窗口打开，
+    /// 但若目标已被其他窗口持有则激活 owner（不在当前窗口重复打开）。
+    func handleLinkedMarkdownFile(_ url: URL) {
+        // 已是当前文件：幂等
+        if documentViewModel.currentFileURL?.standardizedFileURL == url { return }
+
+        // 目标已被其他窗口持有：激活 owner，不在本窗口打开
+        if let coordinator, coordinator.isFileOwnedByAnotherWindow(url, besides: id) {
+            if let identity = try? coordinator.sharedIdentityService.identity(for: url, kind: .file),
+               let ownerID = coordinator.owner(of: identity) {
+                coordinator.activate(windowID: ownerID)
+            }
+            return
+        }
+
+        // 脏 Untitled：先询问保存/不保存/取消
+        if documentViewModel.isUntitled && documentViewModel.isDirty {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let termCoord = self.terminationCoordinatorForTesting ?? AppDelegate.sharedTerminationCoordinator
+                let decision = await termCoord.resolveUnsavedChanges(for: self)
+                guard decision == .proceed else { return }
+                self.openLinkedMarkdownFile(url)
+            }
+            return
+        }
+        openLinkedMarkdownFile(url)
+    }
+
+    /// 内链目标无所有权冲突时的实际打开（根目录内走目录内导航，否则当前窗口单文件打开）。
+    private func openLinkedMarkdownFile(_ url: URL) {
+        if let rootDir = appViewModel.rootDirectory,
+           url.standardizedFileURL.path.hasPrefix(rootDir.standardizedFileURL.path + "/") {
+            // 根目录内：复用目录内导航事务（声明所有权/释放旧文件/切换选中）
+            requestFileSelection(url)
+            return
+        }
+
+        // 根目录外：首期仍在当前窗口以单文件模式打开（需求 §6.7）。
+        // 声明目标所有权，使其他窗口随后点击同一文件时激活本窗口而非重复打开。
+        if let coordinator {
+            let resource = try? coordinator.sharedIdentityService.identity(for: url, kind: .file)
+            if let resource {
+                do {
+                    try coordinator.claim(resource, for: id)
+                    // 释放此前显示的旧文件所有权（非 Untitled、非目标本身）
+                    if let oldFileURL = documentViewModel.currentFileURL,
+                       !documentViewModel.isUntitled,
+                       oldFileURL.standardizedFileURL != url.standardizedFileURL {
+                        coordinator.releaseFileOwnership(oldFileURL, for: id)
+                    }
+                } catch {
+                    // 并发抢占：激活实际 owner，不在本窗口打开
+                    if let ownerID = coordinator.owner(of: resource) {
+                        coordinator.activate(windowID: ownerID)
+                    }
+                    return
+                }
+            }
+        }
+        appViewModel.openSingleFile(url)
+        fileTreeViewModel.selectedFileURL = url
+        recordLastOpened(file: url, directory: nil)
+        SettingsModel.shared.addRecentItem(url: url, isDirectory: false)
+        Task { @MainActor [weak self] in
+            await self?.documentViewModel.loadFile(at: url)
         }
     }
 
@@ -200,16 +345,29 @@ final class WindowSession {
 
     // MARK: - 窗口级命令（Task 7：替代无目标通知广播）
 
-    /// 新建未保存文件：脏 Untitled 时先询问是否放弃，再创建。
-    /// 注意：未保存确认弹窗需要 UI 上下文，目前直接在脏 Untitled 时跳过创建以避免
-    /// 数据丢失；完整确认流程由调用方（菜单/按钮）在视图层处理。此处保留基础语义，
-    /// 保证菜单 New File 在焦点窗口生效而不广播。
+    /// 新建未保存文件（回归修复：脏 Untitled 时走完整保存/不保存/取消流程）。
+    ///
+    /// - 脏 Untitled：显示「保存 / 不保存 / 取消」。
+    ///   - 保存成功 → 创建新 Untitled；
+    ///   - 不保存 → 完整清理旧 Untitled 后创建新 Untitled；
+    ///   - 取消或保存失败 → 保持当前内容和窗口不变。
+    /// - 非脏状态：直接创建新 Untitled。
     func handleNewFile() {
         if documentViewModel.isUntitled && documentViewModel.isDirty {
-            // 脏 Untitled：不静默覆盖，交由视图层弹窗后再调 createUntitledFile。
-            // 菜单路径下此处直接返回，避免丢失未保存内容。
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let termCoord = self.terminationCoordinatorForTesting ?? AppDelegate.sharedTerminationCoordinator
+                let decision = await termCoord.resolveUnsavedChanges(for: self)
+                guard decision == .proceed else { return }
+                self.createNewUntitled()
+            }
             return
         }
+        createNewUntitled()
+    }
+
+    /// 实际创建一个新 Untitled 文档（清理当前状态后）。
+    private func createNewUntitled() {
         guard documentViewModel.createUntitledFile() != nil else { return }
         fileTreeViewModel.selectedFileURL = nil
         appViewModel.selectedFile = nil
@@ -218,12 +376,18 @@ final class WindowSession {
     }
 
     /// 保存当前文件（含重入保护）。
+    /// 回归修复：Untitled 文档走本窗口 Save As 流程（`DocumentViewModel.save()` 对 Untitled
+    /// 返回 false，此处据此转 handleSaveAs），不再静默 no-op。
     func handleSave() {
         guard !documentViewModel.isSaving && !documentViewModel.isSavePanelShowing else { return }
+        if documentViewModel.isUntitled {
+            handleSaveAs()
+            return
+        }
         Task { @MainActor in await documentViewModel.save() }
     }
 
-    /// 另存为：弹 NSSavePanel，成功后迁移所有权并刷新文件树/最近记录。
+    /// 另存为：弹 NSSavePanel（窗口级 sheet），成功后迁移所有权并刷新文件树/最近记录。
     func handleSaveAs() {
         guard !documentViewModel.isSavePanelShowing else { return }
         let settings = SettingsModel.shared
@@ -232,42 +396,54 @@ final class WindowSession {
         let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
         let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
 
-       guard let saveURL = OpenPanelHelper.showSavePanel(
-            for: window,
-            language: language,
-            defaultDirectory: defaultDir,
-            suggestedName: suggestedName
-       ) else {
-            documentViewModel.isSavePanelShowing = false
-            return
-        }
-
-        let oldURL = documentViewModel.currentFileURL
+        let owningWindow = window
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let success = await self.documentViewModel.saveAs(to: saveURL)
-            // 保存失败：保留 Untitled 内容，仅复位保存面板状态，不迁移所有权/不刷新/不加 recent
-            guard success else {
+            let saveURL: URL?
+            if let chooser = self.savePanelChooserForTesting {
+                saveURL = await chooser(defaultDir, suggestedName)
+            } else {
+                saveURL = await OpenPanelHelper.showSavePanel(
+                    for: owningWindow,
+                    language: language,
+                    defaultDirectory: defaultDir,
+                    suggestedName: suggestedName
+                )
+            }
+            guard let saveURL else {
                 self.documentViewModel.isSavePanelShowing = false
                 return
             }
-            self.appViewModel.hasUnsavedUntitled = false
-
-            // 所有权迁移：旧 URL → 新 URL（仅当旧 URL 由本窗口持有）
-            if let oldURL, let coordinator = self.coordinator {
-                try? coordinator.migrateOwnership(from: oldURL, to: saveURL, for: self.id)
-            }
-
-            if let rootDir = self.appViewModel.rootDirectory,
-               saveURL.path.hasPrefix(rootDir.path + "/") {
-                await self.fileTreeViewModel.loadDirectory(rootDir)
-                self.fileTreeViewModel.selectedFileURL = saveURL
-            }
-
-            settings.recordLastOpened(file: saveURL, directory: nil, isActive: isLastActiveWindow)
-            settings.addRecentItem(url: saveURL, isDirectory: false)
-            self.documentViewModel.isSavePanelShowing = false
+            await self.performSaveAs(to: saveURL)
         }
+    }
+
+    /// 执行 Save As 落盘与所有权迁移/刷新（由 handleSaveAs 在面板返回后调用）。
+    private func performSaveAs(to saveURL: URL) async {
+        let settings = SettingsModel.shared
+        let oldURL = documentViewModel.currentFileURL
+        let success = await documentViewModel.saveAs(to: saveURL)
+        // 保存失败：保留 Untitled 内容，仅复位保存面板状态，不迁移所有权/不刷新/不加 recent
+        guard success else {
+            documentViewModel.isSavePanelShowing = false
+            return
+        }
+        appViewModel.hasUnsavedUntitled = false
+
+        // 所有权迁移：旧 URL → 新 URL（仅当旧 URL 由本窗口持有）
+        if let oldURL, let coordinator = self.coordinator {
+            try? coordinator.migrateOwnership(from: oldURL, to: saveURL, for: self.id)
+        }
+
+        if let rootDir = self.appViewModel.rootDirectory,
+           saveURL.path.hasPrefix(rootDir.path + "/") {
+            await self.fileTreeViewModel.loadDirectory(rootDir)
+            self.fileTreeViewModel.selectedFileURL = saveURL
+        }
+
+        settings.recordLastOpened(file: saveURL, directory: nil, isActive: isLastActiveWindow)
+        settings.addRecentItem(url: saveURL, isDirectory: false)
+        self.documentViewModel.isSavePanelShowing = false
     }
 }
 
