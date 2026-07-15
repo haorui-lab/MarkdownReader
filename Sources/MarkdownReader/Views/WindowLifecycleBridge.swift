@@ -57,14 +57,23 @@ private struct LifecycleAnchor: NSViewRepresentable {
             // 不再发全局通知（dragHoverChanged/unsupportedFileTypeDropped）。
             installDropOverlay(in: window, for: session)
 
-            // 2. 观察该窗口关闭，触发 dispose
+            // 2. 观察该窗口关闭，同步触发 dispose（Task 3）。
+            //    `willCloseNotification` 在窗口真正开始关闭时同步投递（queue: .main，主线程）。
+            //    此处直接同步 dispose，确保收到通知后、任何下一次路由判断前，该窗口已从
+            //    registeredIDs / sessions / windows / 资源所有权表移除。
+            //    不再用 `Task { @MainActor }` 推迟一个 tick——推迟会让关闭中的窗口在路由快照中
+            //    短暂残留为「空白可复用窗口」，导致资源被错误复用。
+            //    Swift 6 无法从 `queue: .main` 闭包自动推导 MainActor 隔离，用
+            //    `MainActor.assumeIsolated` 显式声明此时已在主线程。
             let close = NotificationCenter.default.addObserver(
                 forName: NSWindow.willCloseNotification,
                 object: window,
                 queue: .main
             ) { [weak self] _ in
                 guard let self else { return }
-                Task { @MainActor in self.session?.dispose() }
+                MainActor.assumeIsolated {
+                    self.session?.dispose()
+                }
             }
             observers = [close]
         }

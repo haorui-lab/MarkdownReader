@@ -188,8 +188,13 @@ final class WindowSession {
     }
 
     /// 释放本会话全部状态：所有权、文件监控、observer 等。
-    /// 由 WindowLifecycleBridge.windowWillClose 调用。
+    /// 由 WindowLifecycleBridge.willCloseNotification 同步调用（Task 3）。
+    /// 幂等：多次调用安全。`isDisposed` 守卫保证 unregister 只执行一次。
+    private var isDisposed = false
+
     func dispose() {
+        guard !isDisposed else { return }
+        isDisposed = true
         coordinator?.unregister(windowID: id)
     }
 
