@@ -29,11 +29,15 @@ struct WindowSceneHost: View {
             // Task 7：把焦点窗口的命令目标发布到 FocusedValues，菜单命令据此路由。
             .focusedSceneValue(\.windowCommandTarget, session.commandTarget)
             .task {
-                // 安装 OpenWindowAction，使 Coordinator 可创建新窗口（幂等）
-                coordinator.install(openWindowAction: openWindow)
-                // 注册 session（window 在 bridge 挂载时回填并 attach）
+                // Task 2：打开请求状态机生命周期顺序。
+                // 1. 先注册 session（Coordinator 持有本窗口会话）。
+                // 2. 再安装 OpenWindowAction（install 内部会触发幂等 drainIfReady，
+                //    让 pending 请求在 action 就绪后自动处理）。
+                // 3. 消费预存资源（新窗口为某文件而创建时）。
+                // 不依赖 applicationDidFinishLaunching 与 .task 的先后顺序——
+                // enqueue 始终先入队，register/install 任一发生都会自动 drain。
                 coordinator.register(session: session)
-                // 消费预存资源（新窗口为某文件而创建时）
+                coordinator.install(openWindowAction: openWindow)
                 if let resource = coordinator.consumePendingResource(for: windowID) {
                     await open(resource: resource)
                 }

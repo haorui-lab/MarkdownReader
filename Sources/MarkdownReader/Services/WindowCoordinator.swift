@@ -56,6 +56,15 @@ final class WindowCoordinator {
     private let routingEngine: WindowRoutingEngine
     private var openWindowAction: OpenWindowAction?
 
+    /// 测试用：注入窗口创建闭包。生产路径走 `OpenWindowAction`。
+    /// 仅当 `openWindowAction == nil` 时生效，使无真实 action 的测试也能完成 createWindow 决策。
+    var windowCreationClosureForTesting: ((WindowID) -> Void)?
+
+    /// 测试用：暴露 pending resource 表，便于断言「资源已预存给新窗口」。
+    var pendingResourcesForTesting: [WindowID: ResourceIdentity] {
+        pendingResources
+    }
+
     init(
         identityService: ResourceIdentityService = ResourceIdentityService(),
         routingEngine: WindowRoutingEngine = WindowRoutingEngine()
@@ -104,8 +113,10 @@ final class WindowCoordinator {
 
     /// 安装 SwiftUI 的 `OpenWindowAction`，使 Coordinator 能创建新窗口。
     /// 幂等：可多次调用，只保留最新 action。
+    /// Task 2：安装后立即尝试 drain（pending 请求可能已在等待 action 就绪）。
     func install(openWindowAction: OpenWindowAction) {
         self.openWindowAction = openWindowAction
+        drainIfReady()
     }
 
     var isReady: Bool { openWindowAction != nil }
@@ -113,12 +124,14 @@ final class WindowCoordinator {
     // MARK: - 会话注册
 
     /// 注册会话。Coordinator 强持有 session。
+    /// Task 2：注册后尝试 drain（pending 请求可能在等待首个 session 就绪）。
     func register(session: WindowSession) {
         sessions[session.id] = session
         registeredIDs.insert(session.id)
         if ownedResources[session.id] == nil {
             ownedResources[session.id] = []
         }
+        drainIfReady()
     }
 
     /// 注册会话并关联其 NSWindow（Task 6 生命周期桥接入口）。
@@ -258,14 +271,23 @@ final class WindowCoordinator {
     /// 创建一个空白窗口。
     func openBlankWindow() {
         let id = WindowID()
-        openWindowAction?(id: WindowSceneID.document, value: id)
+        createWindow(for: id)
     }
 
     /// 为指定资源创建窗口，并预存初始资源供新窗口消费。
     func openResourceInNewWindow(_ resource: ResourceIdentity) {
         let id = WindowID()
         storePending(resource: resource, for: id)
-        openWindowAction?(id: WindowSceneID.document, value: id)
+        createWindow(for: id)
+    }
+
+    /// 实际触发窗口创建：优先 SwiftUI `OpenWindowAction`；测试环境无 action 时走注入闭包。
+    private func createWindow(for id: WindowID) {
+        if openWindowAction != nil {
+            openWindowAction?(id: WindowSceneID.document, value: id)
+        } else {
+            windowCreationClosureForTesting?(id)
+        }
     }
 
     /// 激活某窗口：解最小化、显示、置前、激活应用。
@@ -296,37 +318,93 @@ final class WindowCoordinator {
         }
     }
 
-    // MARK: - 打开请求路由（Task 8）
+    // MARK: - 打开请求路由（Task 2：Coordinator 独立管理队列与 readiness）
 
-    /// 将打开请求入队。
-    /// 若 Coordinator 已 ready（至少一个 session 已注册），立即处理；否则暂存等待 drain。
+    /// drain 重入保护：`handleOpenRequest` 内部可能经 `openWindowAction` 间接触发新的 `enqueue`
+    /// （如窗口挂载后立即 enqueue），重入时新请求留在队列等下一轮，避免递归 drain。
+    private var isDraining = false
+
+    /// 将打开请求入队（Task 2）。
+    ///
+    /// 统一约束：**请求始终先入队**，再按 readiness drain。禁止根据 `hasRegisteredSession`
+    /// 直接绕过队列调用 `handleOpenRequest`——那样会让「ready 但 action 未安装」时请求被
+    /// 直接消费却无法创建窗口（pending resource 无人认领）。
+    ///
+    /// - 入队 → 若 ready（`openWindowAction` 已安装）则 `drainIfReady()`；否则保留等待。
     func enqueue(_ request: OpenRequest) {
-        if hasRegisteredSession {
-            handleOpenRequest(request)
-        } else {
-            pendingRequests.append(request)
-        }
+        pendingRequests.append(request)
+        drainIfReady()
     }
 
-    /// 排空所有待处理请求，返回实际处理的请求列表。
-    /// 由 AppDelegate 在窗口 attach 后调用。
-    /// 优先级：external 请求先于非 external（如 restore），确保冷启动双击文件不被恢复覆盖。
+    /// 幂等的就绪 drain（Task 2）。
+    ///
+    /// 由 `enqueue`、`install(openWindowAction:)`、`register(session:)` 触发。
+    /// 约束：
+    /// - `openWindowAction == nil` 时直接返回，**不清除任何请求**。
+    /// - 重入保护：drain 期间新入队的请求留到下一轮（见 `performDrain` 的收尾重试）。
+    /// - external 请求先于非 external（如 restore），同优先级 FIFO。
+    /// - 每个请求**进入路由执行阶段后**才从队列移除（先按顺序取出再执行，执行失败也不回填，
+    ///   因为 missing URL 等已在路由层 reject，不阻塞后续）。
+    func drainIfReady() {
+        _ = performDrain(returnsProcessed: false)
+    }
+
+    /// 排空所有待处理请求，返回实际处理的请求列表（Task 2）。
+    ///
+    /// 语义：
+    /// - `openWindowAction == nil`（且无测试闭包）时不删除任何请求，返回空。
+    /// - 返回本轮实际处理（进入路由执行阶段）的请求列表。
     @discardableResult
     func drainPendingRequests() -> [OpenRequest] {
-        guard !pendingRequests.isEmpty else { return [] }
+        performDrain(returnsProcessed: true) ?? []
+    }
+
+    /// drain 的唯一实现（Task 2 收敛：消除 `drainIfReady` / `drainPendingRequests` 重复逻辑）。
+    ///
+    /// - Parameters:
+    ///   - returnsProcessed: true 时返回本轮处理的请求列表；false 时返回 nil（`drainIfReady` 不关心）。
+    /// - Returns: 处理的请求列表（仅 `returnsProcessed == true` 时有意义），或 nil。
+    ///
+    /// 重入语义：处理过程中清空队列再遍历 toProcess。若 drain 期间（`isDraining == true`）有新请求
+    /// 经 `enqueue` 入队，那次 `enqueue` 调的 `drainIfReady` 会被重入闸挡住直接返回，新请求留在队列。
+    /// 因此 `defer` 复位 `isDraining` 后**补一次收尾 drain**——若队列此时非空则再处理一轮，否则直接返回。
+    /// 收尾 drain 不会无限递归：若再次无新请求入队，下一轮 `performDrain` 在「队列为空」闸处返回。
+    @discardableResult
+    private func performDrain(returnsProcessed: Bool) -> [OpenRequest]? {
+        // readiness：action 未安装且无测试闭包时根本无法创建新窗口，drain 会丢失请求 → 保留等待。
+        guard openWindowAction != nil || windowCreationClosureForTesting != nil else {
+            return returnsProcessed ? [] : nil
+        }
+        // 重入：正在 drain 时新入队的请求留到下一轮（由 defer 后收尾 drain 接管）。
+        guard !isDraining else { return returnsProcessed ? [] : nil }
+        // 无待处理请求：直接返回。
+        guard !pendingRequests.isEmpty else { return returnsProcessed ? [] : nil }
+
+        isDraining = true
+        defer {
+            isDraining = false
+            // 收尾：drain 期间若有新请求入队（被重入闸挡住），此处补一轮。队列为空时下一轮立即返回。
+            if !pendingRequests.isEmpty {
+                _ = performDrain(returnsProcessed: false)
+            }
+        }
+
+        // 排序：external 优先，同优先级保持入队顺序（FIFO）。stable 排序保证稳定性。
         let sorted = pendingRequests.sorted { a, b in
-            // external 优先
             if a.source == .external && b.source != .external { return true }
             if a.source != .external && b.source == .external { return false }
-            return false // 保持原序
+            return false
         }
-        var processed: [OpenRequest] = []
-        for request in sorted {
-            handleOpenRequest(request)
-            processed.append(request)
-        }
+
+        // 暂存本轮要处理的请求并清空队列；drain 期间新入队的请求会进入被清空后的队列，
+        // 由 defer 收尾 drain 接管。
+        let toProcess = sorted
         pendingRequests.removeAll()
-        return processed
+
+        for request in toProcess {
+            handleOpenRequest(request)
+        }
+        return returnsProcessed ? toProcess : nil
     }
 
     /// 对一批 URL 做路由决策（不执行副作用）。
@@ -449,7 +527,7 @@ final class WindowCoordinator {
             case .createWindow(let newID, let resource):
                 // 创建新窗口：预存资源，由 WindowSceneHost 消费
                 storePending(resource: resource, for: newID)
-                openWindowAction?(id: WindowSceneID.document, value: newID)
+                createWindow(for: newID)
 
             case .activateOwner(let ownerID, _):
                 activate(windowID: ownerID)

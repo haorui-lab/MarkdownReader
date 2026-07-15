@@ -18,6 +18,8 @@ final class WindowScopedActionTests: TemporaryDirectoryTestCase {
 
     func testDropCallbackCarriesTargetWindowID() throws {
         let coordinator = WindowCoordinator()
+        // Task 2：enqueue 现在按 readiness drain；注入测试闭包使 createWindow 可执行。
+        coordinator.windowCreationClosureForTesting = { _ in }
         let session = makeSession(coordinator: coordinator)
         coordinator.register(session: session)
 
@@ -58,6 +60,8 @@ final class WindowScopedActionTests: TemporaryDirectoryTestCase {
 
     func testUnsupportedDropDoesNotBlockSubsequentURL() throws {
         let coordinator = WindowCoordinator()
+        // Task 2：注入测试闭包使 drain 可执行。
+        coordinator.windowCreationClosureForTesting = { _ in }
         let session = makeSession(coordinator: coordinator)
         coordinator.register(session: session)
 
