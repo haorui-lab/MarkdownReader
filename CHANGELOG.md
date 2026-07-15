@@ -9,11 +9,23 @@
 
 ### 已知遗留（后续处理）
 
-- `ContentView.handleFileSwitchWithUnsavedChanges` 与 `handleDeletedFileWithUnsavedChanges` 仍用 `NSAlert.runModal()`（应用级 modal，多窗口下阻塞所有窗口）；Save/SaveAs/ExportPDF 面板已改窗口级 sheet，但未保存确认 alert 尚未统一，待改为 `beginSheetModal(for: window)`
+- `ContentView.handleDeletedFileWithUnsavedChanges` 仍用 `NSAlert.runModal()`（应用级 modal，多窗口下阻塞所有窗口）；Save/SaveAs/ExportPDF 面板已改窗口级 sheet，但文件被外部删除的未保存确认 alert 尚未统一，待改为 `beginSheetModal(for: window)`
 - `FileTreeViewModel.moveItem` 的 NSOpenPanel 仍用 `runModal()`，多窗口下阻塞，待改窗口级 sheet
-- `handleFileSwitchWithUnsavedChanges` 的 save 分支 `saveAs` 成功后直接 `loadFile(at: newURL)` 未声明 newURL 所有权（pre-existing，若 newURL 被其他窗口持有会双加载）；待复用 `WindowSession.requestFileSelection` 走所有权事务
 - 菜单 nil target 禁用状态、PDF sheet 附着等需真实焦点环境的验证尚未覆盖（SwiftUI Commands 焦点读取无法用普通 XCTest 可靠覆盖），待补最小 UI harness
 - 双窗口/多目录/最小化/全屏/关闭最后窗口重开等人工回归矩阵未执行，需 GUI 环境验证
+
+## [2.2.1] - 2026-07-15
+
+### 修复
+
+- **Cmd+N 后目录内文件切换失效与编辑器残留内容反写**：修复多窗口场景下三处回归根因，统一文件切换事务到 `WindowSession`
+  - 根因1：Cmd+N 创建 Untitled 后未释放此前真实文件所有权，导致窗口同时持有旧文件 + Untitled，再次选择该文件被误判幂等无反应。`createNewUntitled` 现记录并释放 `previousRealFileURL` 所有权，保留根目录所有权
+  - 根因2：`requestFileSelection` 幂等判断仅检查「本窗口持有」，无法处理残留所有权。改为同时校验持有 + `currentFileURL` + `selectedFileURL` 三者一致，持有但非当前文档时强制重新声明所有权以自愈
+  - 根因3：`SyntaxHighlightedEditor.updateNSView` 在文件身份变化时未阻止 first responder 把上一个文件内容反写回 ViewModel。新增 `EditorSyncPolicy` 纯逻辑，将 `contentVersion` 与 `fileDidChange` 一并视为强制覆盖条件
+  - 脏 Untitled 保存确认从视图层移至 `openFileInDirectoryWindow`，决策通过前不改 `selectedFileURL`，消除双重加载与弹窗竞态；删除 `ContentView.handleFileSwitchWithUnsavedChanges`，视图层仅响应已确认的选中项变化
+  - `DocumentViewModel` 在 `createUntitledFile` / `discardUntitledFile` / `clearSelection` 等程序化清空处递增 `contentVersion`，强制编辑器采用空内容
+- 新增 `SyntaxHighlightedEditorSyncTests` 覆盖同步策略；扩展 `DirectoryWindowNavigationTests` 与 `NewFileAndSaveFlowTests` 覆盖 Cmd+N 释放所有权、干净/脏 Untitled 往返切换、保存取消/失败等回归路径
+- 修正 CHANGELOG「已知遗留」中已与代码矛盾的条目（`handleFileSwitchWithUnsavedChanges` 已随本次修复删除）
 
 ## [2.2.0] - 2026-07-14
 
