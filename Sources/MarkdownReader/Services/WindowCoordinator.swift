@@ -40,7 +40,21 @@ final class WindowCoordinator {
     private var windows: [WindowID: WeakWindow] = [:]
 
     /// 最后活动窗口，用于 Dock 重开前置和单窗口恢复。
-    private(set) var lastActiveWindowID: WindowID?
+    /// 由 MRU 列表（`mruWindowIDs`）的末尾派生，确保关闭当前窗口后回退到最近活动的窗口。
+    private(set) var lastActiveWindowID: WindowID? {
+        get { mruWindowIDs.last }
+        set {
+            if let id = newValue {
+                recordActive(windowID: id)
+            } else {
+                mruWindowIDs.removeAll()
+            }
+        }
+    }
+
+    /// 窗口活动顺序（MRU，最久未用在前、最近活动在末尾）。
+    /// Task 5：替代 `registeredIDs.first` 的非确定性回退，提供确定性的「上一个活动窗口」。
+    private var mruWindowIDs: [WindowID] = []
 
     // MARK: - 打开请求队列（Task 8）
 
@@ -170,9 +184,10 @@ final class WindowCoordinator {
         blankFlags.removeValue(forKey: windowID)
         registeredIDs.remove(windowID)
         sessions.removeValue(forKey: windowID)
-        if lastActiveWindowID == windowID {
-            lastActiveWindowID = registeredIDs.first
-        }
+        // Task 5：从 MRU 移除。lastActiveWindowID 由 MRU 末尾派生——
+        // 若关闭的正是当前活动窗口，回退到 MRU 中最近活动且仍注册的窗口（末尾）；
+        // 没有窗口时 lastActiveWindowID 自然为 nil。
+        mruWindowIDs.removeAll { $0 == windowID }
     }
 
     // MARK: - 所有权事务
@@ -306,9 +321,11 @@ final class WindowCoordinator {
         NSApp?.activate(ignoringOtherApps: true)
     }
 
-    /// 记录最后活动窗口。
+    /// 记录最后活动窗口（Task 5：维护 MRU 顺序）。
+    /// 将 windowID 移到 MRU 末尾（最近活动），lastActiveWindowID 由末尾派生。
     func recordActive(windowID: WindowID) {
-        lastActiveWindowID = windowID
+        mruWindowIDs.removeAll { $0 == windowID }
+        mruWindowIDs.append(windowID)
     }
 
     /// 所有已注册且仍可见的窗口（用于 Dock 重开判断和 Window 菜单）。

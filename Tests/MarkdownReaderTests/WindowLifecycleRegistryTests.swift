@@ -143,4 +143,58 @@ final class WindowLifecycleRegistryTests: TemporaryDirectoryTestCase {
         XCTAssertNil(snapshot.owners[resource], "dispose 后路由快照不得含已释放资源")
         XCTAssertNotNil(snapshot.sessions[survivingID], "存活窗口应仍在快照中")
     }
+
+    // MARK: - lastActive 关闭后回退到真实的上一个活动窗口（Task 5）
+
+    func testLastActiveFallsBackToPreviousActiveWindow() {
+        let coordinator = makeCoordinator()
+        let a = WindowID()
+        let b = WindowID()
+        let c = WindowID()
+        coordinator.registerSession(id: a, isBlank: false)
+        coordinator.registerSession(id: b, isBlank: false)
+        coordinator.registerSession(id: c, isBlank: false)
+
+        // 活动顺序：a → b → c（c 最近活动）
+        coordinator.recordActive(windowID: a)
+        coordinator.recordActive(windowID: b)
+        coordinator.recordActive(windowID: c)
+        XCTAssertEqual(coordinator.lastActiveWindowID, c, "最近活动窗口为 c")
+
+        // 关闭 c：应回退到上一个活动窗口 b（而非 registeredIDs.first 的非确定值）
+        coordinator.unregister(windowID: c)
+        XCTAssertEqual(coordinator.lastActiveWindowID, b,
+                       "关闭当前活动窗口后应回退到最近活动且仍注册的窗口 b")
+
+        // 关闭 b：回退到 a
+        coordinator.unregister(windowID: b)
+        XCTAssertEqual(coordinator.lastActiveWindowID, a,
+                       "继续回退到上一个活动窗口 a")
+
+        // 关闭 a：无窗口，设为 nil
+        coordinator.unregister(windowID: a)
+        XCTAssertNil(coordinator.lastActiveWindowID, "无窗口时 lastActive 应为 nil")
+    }
+
+    // MARK: - recordActive 移到末尾（MRU 顺序）（Task 5）
+
+    func testRecordActiveMovesWindowToEnd() {
+        let coordinator = makeCoordinator()
+        let a = WindowID()
+        let b = WindowID()
+        coordinator.registerSession(id: a, isBlank: false)
+        coordinator.registerSession(id: b, isBlank: false)
+
+        coordinator.recordActive(windowID: a)
+        coordinator.recordActive(windowID: b)
+        XCTAssertEqual(coordinator.lastActiveWindowID, b)
+
+        // a 再次活动 → 移到末尾，成为最近活动
+        coordinator.recordActive(windowID: a)
+        XCTAssertEqual(coordinator.lastActiveWindowID, a, "重新活动后 a 应移到 MRU 末尾")
+
+        // 关闭 a 后回退到 b（b 现在是上一个活动）
+        coordinator.unregister(windowID: a)
+        XCTAssertEqual(coordinator.lastActiveWindowID, b)
+    }
 }
