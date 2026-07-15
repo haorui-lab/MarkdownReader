@@ -407,107 +407,106 @@ final class WindowCoordinator {
         return returnsProcessed ? toProcess : nil
     }
 
-    /// 对一批 URL 做路由决策（不执行副作用）。
-    /// 将 URL 转为 ResourceIdentity，委托 routingEngine 批量决策。
-    /// 缺失文件产生 `.reject`，但不阻塞后续 URL。
-    func routeOpenRequest(urls: [URL], preferredWindowID: WindowID?) -> [RouteDecision] {
-        var resources: [(URL, ResourceIdentity)] = []
+    /// 路由后的打开项：把 URL 与其决策关联起来（Task 4）。
+    struct RoutedOpenItem: Equatable {
+        let url: URL
+        let decision: RouteDecision
+    }
+
+    /// 对一批 URL 做路由决策（不执行副作用），返回 `RoutedOpenItem`（Task 4）。
+    ///
+    /// 约束：
+    /// - 每个 URL **只做一次**存在性、类型和 identity 解析（旧实现遍历两次）。
+    /// - missing → `.reject(.resourceMissing)`；identity 构建失败 → `.reject(.unsupportedType)`。
+    /// - 同一批请求中的**重复 identity 只决策一次**（重复项复用首项决策，避免重复副作用）。
+    /// - 保留原始有效资源顺序（按 urls 输入顺序）。
+    /// - 批量决策复用 `routingEngine.decisions(for:)`，不再复制 working state 更新逻辑。
+    ///
+    /// 不能把 decisions 整体替换成 `decisions(for:)` 再按下标回填——批量 API 会去重，
+    /// 返回的 decisions 数组短于 urls，下标映射错位。这里先解析出「去重的有效 identity 顺序」，
+    /// 用批量 API 拿到它们的决策，再按原始 url 顺序回填（重复 identity 复用同一决策）。
+    func routeOpenRequest(urls: [URL], preferredWindowID: WindowID?) -> [RoutedOpenItem] {
+        // 单次遍历：解析每个 url 的存在性/类型/identity，同时收集去重的有效 identity 顺序。
+        var dedupedIdentities: [ResourceIdentity] = []
+        var dedupedSet = Set<ResourceIdentity>()
+        // 每个 url 按顺序记录解析结果：要么 identity，要么 reject。
+        var perURL: [PerURLRouting] = []
+
         for url in urls {
-            // 判断文件/目录
             var isDir: ObjCBool = false
             guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else {
-                // 缺失文件：产生 reject 占位，保持索引对齐
-                // 用一个 dummy identity 表示，routingEngine 不处理它
-                // 我们直接在结果中插入 reject
+                perURL.append(.reject(.resourceMissing(url), url))
                 continue
             }
             let kind: ResourceIdentity.Kind = isDir.boolValue ? .directory : .file
-            do {
-                let identity = try identityService.identity(for: url, kind: kind)
-                resources.append((url, identity))
-            } catch {
+            guard let identity = try? identityService.identity(for: url, kind: kind) else {
+                perURL.append(.reject(.unsupportedType(url), url))
                 continue
             }
+            // 去重：仅首次出现的 identity 进入批量决策；后续重复 url 复用其决策。
+            if dedupedSet.insert(identity).inserted {
+                dedupedIdentities.append(identity)
+            }
+            perURL.append(.identity(identity, url))
         }
 
-       // 用 routingEngine 做批量决策
-       var state = routingSnapshot()
-        var decisions: [RouteDecision] = []
-        var resourceIndex = 0
-
-        for url in urls {
-            var isDir: ObjCBool = false
-            if !FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) {
-                decisions.append(.reject(.resourceMissing(url)))
-                continue
-            }
-            guard resourceIndex < resources.count, resources[resourceIndex].0 == url else {
-                // URL 在 resources 中没找到（如 identity 构建失败）
-                let kind: ResourceIdentity.Kind = isDir.boolValue ? .directory : .file
-                if let identity = try? identityService.identity(for: url, kind: kind) {
-                    let decision = routingEngine.decision(
-                        for: identity,
-                        preferredWindowID: preferredWindowID,
-                        state: state
-                    )
-                    decisions.append(decision)
-                    // 更新 state 以反映此资源已被占用
-                    switch decision {
-                    case .openInSession(let wid, _):
-                        state.owners[identity] = wid
-                        state.sessions[wid]?.isBlank = false
-                    case .createWindow(let wid, _):
-                        state.owners[identity] = wid
-                        state.sessions[wid] = SessionRoutingSnapshot(id: wid, isBlank: false)
-                    case .activateOwner, .reject:
-                        break
-                    }
-                } else {
-                    decisions.append(.reject(.unsupportedType(url)))
-                }
-                continue
-            }
-
-            let identity = resources[resourceIndex].1
-            resourceIndex += 1
-
-            let decision = routingEngine.decision(
-                for: identity,
-                preferredWindowID: preferredWindowID,
-                state: state
-            )
-            decisions.append(decision)
-
-            // 更新 working state，使后续 URL 的决策看到前序变更
-            switch decision {
-            case .openInSession(let wid, _):
-                state.owners[identity] = wid
-                state.sessions[wid]?.isBlank = false
-            case .createWindow(let wid, _):
-                state.owners[identity] = wid
-                state.sessions[wid] = SessionRoutingSnapshot(id: wid, isBlank: false)
-            case .activateOwner, .reject:
-                break
-            }
+        // 批量决策（复用 routingEngine，内部维护 working state 与 blankConsumed）。
+        let decisions = routingEngine.decisions(
+            for: dedupedIdentities,
+            preferredWindowID: preferredWindowID,
+            state: routingSnapshot()
+        )
+        // identity → 决策 的映射（去重后一一对应）。
+        var decisionByIdentity: [ResourceIdentity: RouteDecision] = [:]
+        for (identity, decision) in zip(dedupedIdentities, decisions) {
+            decisionByIdentity[identity] = decision
         }
 
-        return decisions
+        // 回填：按原始 url 顺序输出 RoutedOpenItem，重复 identity 复用同一决策。
+        var items: [RoutedOpenItem] = []
+        items.reserveCapacity(perURL.count)
+        for entry in perURL {
+            switch entry {
+            case .identity(let identity, let url):
+                let decision = decisionByIdentity[identity] ?? .reject(.unsupportedType(url))
+                items.append(RoutedOpenItem(url: url, decision: decision))
+            case .reject(let error, let url):
+                items.append(RoutedOpenItem(url: url, decision: .reject(error)))
+            }
+        }
+        return items
     }
 
-    /// 执行打开请求：路由 + 副作用（激活/创建窗口）。
-    /// 这是 Coordinator 对外的统一打开入口，所有打开入口都应通过 `enqueue` 间接调用此方法。
+    /// 单个 URL 的路由解析中间结果（内部用）。
+    private enum PerURLRouting {
+        case identity(ResourceIdentity, URL)
+        case reject(OpenRoutingError, URL)
+    }
+
+    /// 执行打开请求：路由 + 副作用（激活/创建窗口）（Task 4）。
+    /// 直接遍历 `RoutedOpenItem`，不再用 decision 下标反查 `request.urls[index]`。
+    ///
+    /// 重复 identity 跳过（Task 4 收尾）：同一请求中重复 URL 复用首项决策，但只对首个执行
+    /// openInSession/createWindow 副作用，后续重复项直接激活 owner，避免重复文件加载。
     private func handleOpenRequest(_ request: OpenRequest) {
         guard !request.urls.isEmpty else { return }
 
-        let decisions = routeOpenRequest(
+        let items = routeOpenRequest(
             urls: request.urls,
             preferredWindowID: request.preferredWindowID
         )
 
-        for (index, decision) in decisions.enumerated() {
-            let url = request.urls[index]
-            switch decision {
+        var executedIdentities = Set<ResourceIdentity>()
+
+        for item in items {
+            let url = item.url
+            switch item.decision {
             case .openInSession(let windowID, let resource):
+                // 重复 identity：首项已执行过 open 副作用，后续只激活 owner，不再重复加载
+                if !executedIdentities.insert(resource).inserted {
+                    activate(windowID: windowID)
+                    continue
+                }
                 // 复用已有窗口：在 session 中打开资源（文件或目录）
                 if let session = sessions[windowID] {
                     session.markOpenStarted()
@@ -525,6 +524,11 @@ final class WindowCoordinator {
                 }
 
             case .createWindow(let newID, let resource):
+                // 重复 identity：首项已建窗，后续激活该新窗口（虽然尚未 attach，激活会触发 openWindowAction 前置）
+                if !executedIdentities.insert(resource).inserted {
+                    activate(windowID: newID)
+                    continue
+                }
                 // 创建新窗口：预存资源，由 WindowSceneHost 消费
                 storePending(resource: resource, for: newID)
                 createWindow(for: newID)

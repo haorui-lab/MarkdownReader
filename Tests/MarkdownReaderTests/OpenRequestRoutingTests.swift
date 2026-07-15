@@ -132,21 +132,24 @@ final class OpenRequestRoutingTests: TemporaryDirectoryTestCase {
         coordinator.registerSession(id: blank, isBlank: true)
         let url1 = fileURL("first.md")
         let url2 = fileURL("second.md")
-        let decisions = coordinator.routeOpenRequest(
+        let items = coordinator.routeOpenRequest(
             urls: [url1, url2],
             preferredWindowID: blank
         )
-        XCTAssertEqual(decisions.count, 2)
-        if case .openInSession(let windowID, _) = decisions[0] {
+        XCTAssertEqual(items.count, 2)
+        if case .openInSession(let windowID, _) = items[0].decision {
             XCTAssertEqual(windowID, blank)
         } else {
-            XCTFail("expected .openInSession for first URL, got \(decisions[0])")
+            XCTFail("expected .openInSession for first URL, got \(items[0].decision)")
         }
-        if case .createWindow = decisions[1] {
+        if case .createWindow = items[1].decision {
             // pass
         } else {
-            XCTFail("expected .createWindow for second URL, got \(decisions[1])")
+            XCTFail("expected .createWindow for second URL, got \(items[1].decision)")
         }
+        // Task 4：RoutedOpenItem.url 与输入 url 一一对应，保留原始顺序
+        XCTAssertEqual(items[0].url, url1)
+        XCTAssertEqual(items[1].url, url2)
     }
 
     func testOpenRecentActivatesExistingOwner() throws {
@@ -158,15 +161,15 @@ final class OpenRequestRoutingTests: TemporaryDirectoryTestCase {
         let url = fileURL("owned.md")
         let identity = try identityService.identity(for: url, kind: .file)
         try coordinator.claim(identity, for: owner)
-        let decisions = coordinator.routeOpenRequest(
+        let items = coordinator.routeOpenRequest(
             urls: [url],
             preferredWindowID: other
         )
-        XCTAssertEqual(decisions.count, 1)
-        if case .activateOwner(let windowID, _) = decisions[0] {
+        XCTAssertEqual(items.count, 1)
+        if case .activateOwner(let windowID, _) = items[0].decision {
             XCTAssertEqual(windowID, owner)
         } else {
-            XCTFail("expected .activateOwner, got \(decisions[0])")
+            XCTFail("expected .activateOwner, got \(items[0].decision)")
         }
     }
 
@@ -176,36 +179,86 @@ final class OpenRequestRoutingTests: TemporaryDirectoryTestCase {
         coordinator.registerSession(id: blank, isBlank: true)
         let missingURL = temporaryDirectory!.appendingPathComponent("nonexistent.md")
         let existingURL = fileURL("exists.md")
-        let decisions = coordinator.routeOpenRequest(
+        let items = coordinator.routeOpenRequest(
             urls: [missingURL, existingURL],
             preferredWindowID: blank
         )
-        XCTAssertEqual(decisions.count, 2)
-        if case .reject = decisions[0] {
+        XCTAssertEqual(items.count, 2)
+        // missing 产生明确 reject，且保留原始顺序
+        XCTAssertEqual(items[0].url, missingURL)
+        if case .reject = items[0].decision {
             // pass
         } else {
-            XCTFail("expected .reject for missing file, got \(decisions[0])")
+            XCTFail("expected .reject for missing file, got \(items[0].decision)")
         }
-        if case .openInSession = decisions[1] {
+        XCTAssertEqual(items[1].url, existingURL)
+        if case .openInSession = items[1].decision {
             // pass
         } else {
-            XCTFail("expected .openInSession for existing file, got \(decisions[1])")
+            XCTFail("expected .openInSession for existing file, got \(items[1].decision)")
         }
     }
 
     func testNoVisibleWindowCreatesOrReopensCorrectWindow() {
         let coordinator = makeCoordinator()
         let url = fileURL("lone.md")
-        let decisions = coordinator.routeOpenRequest(
+        let items = coordinator.routeOpenRequest(
             urls: [url],
             preferredWindowID: nil
         )
-        XCTAssertEqual(decisions.count, 1)
-        if case .createWindow = decisions[0] {
+        XCTAssertEqual(items.count, 1)
+        if case .createWindow = items[0].decision {
             // pass
         } else {
-            XCTFail("expected .createWindow when no sessions, got \(decisions[0])")
+            XCTFail("expected .createWindow when no sessions, got \(items[0].decision)")
         }
+    }
+
+    // MARK: - Task 4：重复 identity 只决策一次，重复项复用首项决策
+
+    func testDuplicateIdentityReusesFirstDecision() throws {
+        let coordinator = makeCoordinator()
+        let blank = WindowID()
+        coordinator.registerSession(id: blank, isBlank: true)
+        let url = try makeFile(named: "dup.md", content: "# dup")
+        // 同一 URL 出现两次：首次复用 blank（openInSession），第二次应复用首次决策（openInSession 同一窗口）
+        let items = coordinator.routeOpenRequest(
+            urls: [url, url],
+            preferredWindowID: blank
+        )
+        XCTAssertEqual(items.count, 2, "保留原始顺序，每个 url 一个 item")
+        if case .openInSession(let firstWindow, _) = items[0].decision {
+            XCTAssertEqual(firstWindow, blank)
+            // 第二项复用首项决策（重复 identity 不产生 createWindow）
+            if case .openInSession(let secondWindow, _) = items[1].decision {
+                XCTAssertEqual(secondWindow, blank, "重复 identity 复用首项决策")
+            } else {
+                XCTFail("expected second duplicate to reuse first decision, got \(items[1].decision)")
+            }
+        } else {
+            XCTFail("expected .openInSession for first URL, got \(items[0].decision)")
+        }
+    }
+
+    // MARK: - Task 4：缺失与不支持产生明确 reject，不阻塞后续
+
+    func testMissingAndValidProduceRejectThenOpenInOrder() throws {
+        let coordinator = makeCoordinator()
+        let blank = WindowID()
+        coordinator.registerSession(id: blank, isBlank: true)
+        let missing = temporaryDirectory!.appendingPathComponent("nope.md")
+        let present = fileURL("present.md")
+        let items = coordinator.routeOpenRequest(
+            urls: [missing, present, missing],
+            preferredWindowID: blank
+        )
+        XCTAssertEqual(items.count, 3, "缺失项保留在结果中（reject），不丢弃不阻塞")
+        if case .reject = items[0].decision {} else { XCTFail("missing should reject") }
+        if case .openInSession = items[1].decision {} else { XCTFail("present should open") }
+        if case .reject = items[2].decision {} else { XCTFail("second missing should reject") }
+        XCTAssertEqual(items[0].url, missing)
+        XCTAssertEqual(items[1].url, present)
+        XCTAssertEqual(items[2].url, missing)
     }
 }
 
