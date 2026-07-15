@@ -522,7 +522,12 @@ private struct FileOpenModifier: ViewModifier {
                 suggestedName: suggestedName
             ) {
                 Task {
-                    await documentViewModel.saveAs(to: saveURL)
+                    let success = await documentViewModel.saveAs(to: saveURL)
+                    guard success else {
+                        // 写入失败：保留原内容与窗口，fileError 已由 saveAs 设置
+                        completion(false)
+                        return
+                    }
                     appViewModel.hasUnsavedUntitled = false
 
                     // 如果保存在当前目录下，刷新文件树
@@ -651,7 +656,12 @@ private struct SelectionChangeModifier: ViewModifier {
                 suggestedName: suggestedName
             ) {
                 Task {
-                    await documentViewModel.saveAs(to: saveURL)
+                    let success = await documentViewModel.saveAs(to: saveURL)
+                    guard success else {
+                        // 写入失败：回退选中项，保留原内容
+                        fileTreeViewModel.selectedFileURL = oldURL
+                        return
+                    }
                     appViewModel.hasUnsavedUntitled = false
                     await documentViewModel.loadFile(at: newURL)
                     let node = findFileNode(in: fileTreeViewModel.nodes, url: newURL)
@@ -715,7 +725,12 @@ private struct SelectionChangeModifier: ViewModifier {
                 suggestedName: suggestedName
             ) {
                 Task {
-                    await documentViewModel.saveAs(to: saveURL)
+                    let success = await documentViewModel.saveAs(to: saveURL)
+                    guard success else {
+                        // 写入失败：保留当前文档内容让用户继续操作
+                        appViewModel.selectedFile = nil
+                        return
+                    }
                     documentViewModel.deselectCurrentFile()
                     appViewModel.selectedFile = nil
 
@@ -879,9 +894,17 @@ private struct KeyWindowTracker: NSViewRepresentable {
     }
 }
 
-// MARK: - 窗口关闭保护（Task 12：委托 TerminationCoordinator）
+// MARK: - 窗口关闭保护（Task 1：异步关闭状态机，消除 semaphore 死锁）
 
-/// 通过 NSViewRepresentable 设置窗口代理，关闭前委托 TerminationCoordinator 询问所属 session。
+/// 通过 NSViewRepresentable 设置窗口代理，关闭前处理未保存 Untitled。
+///
+/// Cmd+W 状态机（`windowShouldClose` 必须同步返回，但不得同步等待保存）：
+/// 1. 无脏 Untitled：返回 `true`。
+/// 2. 已有关闭流程运行或持有一次性放行标记：消费标记返回 `true`，否则返回 `false`。
+/// 3. 首次关闭脏 Untitled：启动异步关闭流程，本次返回 `false`。
+/// 4. 异步流程成功（保存成功或选择不保存）：设置一次性 `allowNextClose`，再次 `performClose(nil)`。
+/// 5. 下一次 `windowShouldClose` 消费 `allowNextClose` 并返回 `true`。
+/// 6. 取消或保存失败：保持窗口打开。
 private struct WindowCloseGuard: NSViewRepresentable {
     let session: WindowSession
 
@@ -898,6 +921,15 @@ private struct WindowCloseGuard: NSViewRepresentable {
     private final class WindowCloseGuardView: NSView, NSWindowDelegate {
         weak var session: WindowSession?
 
+        /// 是否有异步关闭流程正在运行（防重复启动）。
+        /// 在 `windowShouldClose` 启动异步流程时置位，在窗口真正开始关闭（`windowWillClose`）
+        /// 时复位——而不是在 `allowNextClose` 消费时。这样 `performClose` 复关触发的标准关闭
+        /// 流程期间标记仍保持，避免 Task 3 同步 dispose 与路由查询产生竞态。
+        private var isClosingInProgress = false
+
+        /// 一次性放行标记：异步保存流程成功后置位，下一次 `windowShouldClose` 消费并返回 true。
+        private var allowNextClose = false
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             window?.delegate = self
@@ -905,69 +937,54 @@ private struct WindowCloseGuard: NSViewRepresentable {
 
         func windowShouldClose(_ sender: NSWindow) -> Bool {
             guard let session else { return true }
-            // Task 12：委托 TerminationCoordinator 的 shouldClose 逻辑
-            // TerminationCoordinator 从 AppDelegate 获取，这里通过 session.coordinator 间接访问
-            let decision = session.prepareForClose()
-            switch decision {
-            case .close:
+
+            // 1. 一次性放行标记：异步流程已确认可关闭，消费并放行（标记在 windowWillClose 复位）
+            if allowNextClose {
+                allowNextClose = false
                 return true
-            case .needsUntitledDecision:
-                // 弹窗逻辑在 ApplicationTerminationCoordinator.presentUntitledSaveAlert
-                // 但 headless 测试无法弹 alert，这里直接用内联逻辑
-                return WindowCloseGuard.presentUntitledSaveAlert(for: session)
-            case .cancel:
+            }
+
+            // 2. 已有异步关闭流程运行：拦截本次，避免二次弹窗
+            if isClosingInProgress {
                 return false
             }
-        }
-    }
 
-    /// 弹出未保存 Untitled 的保存/不保存/取消对话框。
-    @MainActor
-    private static func presentUntitledSaveAlert(for session: WindowSession) -> Bool {
-        let doc = session.documentViewModel
-        let settings = SettingsModel.shared
-        let language = settings.languagePref.resolvedLanguage
-
-        let alert = NSAlert()
-        alert.messageText = L10n.tr(.unsavedChangesTitle, language: language)
-        alert.informativeText = L10n.tr(.unsavedChangesMessage, language: language)
-        alert.alertStyle = .warning
-
-        alert.addButton(withTitle: L10n.tr(.unsavedSave, language: language))
-        alert.addButton(withTitle: L10n.tr(.unsavedDontSave, language: language))
-        alert.addButton(withTitle: L10n.tr(.unsavedCancel, language: language))
-
-        alert.buttons[0].keyEquivalent = "\r"
-        alert.buttons[1].keyEquivalent = "d"
-        alert.buttons[1].keyEquivalentModifierMask = .command
-        alert.buttons[2].keyEquivalent = "\u{1b}"
-
-        let response = alert.runModal()
-
-        switch response {
-        case .alertFirstButtonReturn:
-            let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
-            let suggestedName = doc.fileName.isEmpty ? "Untitled.md" : doc.fileName
-            guard let saveURL = OpenPanelHelper.showSavePanel(
-                for: session.window,
-                language: language,
-                defaultDirectory: defaultDir,
-                suggestedName: suggestedName
-            ) else {
-                return false
+            // 3. 无脏 Untitled：直接关闭
+            if session.prepareForClose() == .close {
+                return true
             }
-            let semaphore = DispatchSemaphore(value: 0)
-            Task { @MainActor in
-                await doc.saveAs(to: saveURL)
-                semaphore.signal()
-            }
-            semaphore.wait()
-            return true
-        case .alertSecondButtonReturn:
-            doc.discardUntitledFile()
-            return true
-        default:
+
+            // 4. 首次关闭脏 Untitled：启动异步流程，本次返回 false
+            isClosingInProgress = true
+            startAsyncClose(session: session, window: sender)
             return false
+        }
+
+        /// 窗口真正开始关闭时复位运行标记。
+        /// 复关路径（performClose）触发的 windowShouldClose 返回 true 后，NSWindow 走标准关闭，
+        /// 此回调同步执行，标记在此复位，与 Task 3 同步 dispose 同一时刻。
+        func windowWillClose(_ notification: Notification) {
+            isClosingInProgress = false
+            allowNextClose = false
+        }
+
+        /// 异步完成「询问 → 选择路径 → 保存」，成功后复关，失败保持窗口。
+        private func startAsyncClose(session: WindowSession, window: NSWindow) {
+            let termCoord = AppDelegate.sharedTerminationCoordinator
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let decision = await termCoord.resolveUnsavedChanges(for: session)
+                switch decision {
+                case .proceed:
+                    // 保存成功或选择不保存：置一次性放行标记，触发复关
+                    self.allowNextClose = true
+                    // performClose 会再次调用 windowShouldClose，消费 allowNextClose 返回 true
+                    window.performClose(nil)
+                case .cancel:
+                    // 取消或保存失败：保持窗口打开，复位运行标记
+                    self.isClosingInProgress = false
+                }
+            }
         }
     }
 }

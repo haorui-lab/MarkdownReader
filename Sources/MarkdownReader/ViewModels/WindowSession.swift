@@ -240,7 +240,12 @@ final class WindowSession {
         let oldURL = documentViewModel.currentFileURL
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.documentViewModel.saveAs(to: saveURL)
+            let success = await self.documentViewModel.saveAs(to: saveURL)
+            // 保存失败：保留 Untitled 内容，仅复位保存面板状态，不迁移所有权/不刷新/不加 recent
+            guard success else {
+                self.documentViewModel.isSavePanelShowing = false
+                return
+            }
             self.appViewModel.hasUnsavedUntitled = false
 
             // 所有权迁移：旧 URL → 新 URL（仅当旧 URL 由本窗口持有）

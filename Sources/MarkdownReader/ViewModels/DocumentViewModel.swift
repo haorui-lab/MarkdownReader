@@ -411,34 +411,42 @@ final class DocumentViewModel {
 
     /// 另存为：将内容保存到用户指定的新位置
     /// - Parameter newURL: 用户选择的新保存位置
-    func saveAs(to newURL: URL) async {
+    /// - Returns: 写入成功返回 `true`；失败返回 `false` 并设置 `fileError`，保留原 Untitled 内容。
+    ///
+    /// 失败时不修改任何状态（不切换 currentFileURL、不清 isUntitled），调用方据此决定是否
+    /// 关闭窗口 / 清未保存标记 / 迁移所有权。副作用只能在成功后执行（见 Task 1 设计）。
+    @discardableResult
+    func saveAs(to newURL: URL) async -> Bool {
+        isSaving = true
+        defer { isSaving = false }
+
+        let oldURL = currentFileURL
         do {
-            isSaving = true
-            defer { isSaving = false }
-
-            let oldURL = currentFileURL
             try await fileService.writeFile(at: newURL, content: content)
-
-            // 清理旧的临时文件
-            if isUntitled, let old = oldURL {
-                try? FileManager.default.removeItem(at: old)
-                contentCache.removeValue(forKey: old)
-                diskContentSnapshot.removeValue(forKey: old)
-            }
-
-            // 更新文件引用
-            currentFileURL = newURL
-            fileName = newURL.lastPathComponent
-            diskContentSnapshot[newURL] = content
-            contentCache[newURL] = content
-            isDirty = false
-            isUntitled = false
-            fileError = nil
-            // 启动对新保存文件的外部变更监控
-            startFileWatcher(for: newURL)
         } catch {
+            // 写入失败：保留原内容与 Untitled 状态，仅呈现错误，不关闭、不清标记
             fileError = .permissionDenied(newURL)
+            return false
         }
+
+        // 清理旧的临时文件
+        if isUntitled, let old = oldURL {
+            try? FileManager.default.removeItem(at: old)
+            contentCache.removeValue(forKey: old)
+            diskContentSnapshot.removeValue(forKey: old)
+        }
+
+        // 更新文件引用
+        currentFileURL = newURL
+        fileName = newURL.lastPathComponent
+        diskContentSnapshot[newURL] = content
+        contentCache[newURL] = content
+        isDirty = false
+        isUntitled = false
+        fileError = nil
+        // 启动对新保存文件的外部变更监控
+        startFileWatcher(for: newURL)
+        return true
     }
 
     /// 检查内容是否与磁盘快照不同，更新脏状态

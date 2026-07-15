@@ -3,7 +3,25 @@ import AppKit
 import os
 import MarkdownReaderKit
 
-/// 应用级终止协调器（Task 12）。
+/// 应用级终止状态机（Task 1）。
+enum TerminationState: Sendable, Equatable {
+    case idle
+    case processing
+    case terminating
+}
+
+/// 应用级终止协调器（Task 1 重构）。
+///
+/// 只负责：应用级遍历、重入控制、最终 termination reply。
+/// 不再重复实现弹窗 —— 单文档保存确认委托给 `UnsavedDocumentCloseCoordinator`。
+///
+/// 重入语义：
+/// - `applicationShouldTerminate` 返回 `.terminateLater` 前，同步把状态从 `.idle`
+///   切到 `.processing`，消除「重复 Cmd+Q 排队」窗口。重复 Cmd+Q 在 `.processing`
+///   期间直接 no-op，不会再产生第二个 `reply`。
+/// - 全部 session 允许关闭后 `reply(true)`，状态切到 `.terminating`（不复位 idle，
+///   因为应用即将退出）。
+/// - 任一 session 取消或保存失败 `reply(false)`，状态复位 `.idle` 允许下次尝试。
 @MainActor
 final class ApplicationTerminationCoordinator {
 
@@ -11,49 +29,90 @@ final class ApplicationTerminationCoordinator {
 
     weak var coordinator: WindowCoordinator?
 
-    private var isTerminating = false
+    /// 单文档关闭协调（弹窗/保存面板边界），由外部注入；默认用 AppKit 实现。
+    private var closeInteraction: UnsavedCloseInteraction
 
-    init(coordinator: WindowCoordinator? = nil) {
+    /// 复用的单文档关闭协调器（无状态，可共享，避免每次调用新建）。
+    private lazy var closeCoordinator = UnsavedDocumentCloseCoordinator(interaction: closeInteraction)
+
+    /// 当前终止状态。`applicationShouldTerminate` 同步读改写，消除重入窗口。
+    private(set) var state: TerminationState = .idle
+
+    init(
+        coordinator: WindowCoordinator? = nil,
+        closeInteraction: UnsavedCloseInteraction = AppKitUnsavedCloseInteraction()
+    ) {
         self.coordinator = coordinator
+        self.closeInteraction = closeInteraction
     }
 
-    func shouldClose(session: WindowSession) -> Bool {
-        let decision = session.prepareForClose()
-        switch decision {
-        case .close:
-            return true
-        case .needsUntitledDecision:
-            return presentUntitledSaveAlert(for: session)
-        case .cancel:
+    /// 注入交互边界（测试用）。重置复用的协调器以绑定新交互。
+    func setCloseInteraction(_ interaction: UnsavedCloseInteraction) {
+        closeInteraction = interaction
+        closeCoordinator = UnsavedDocumentCloseCoordinator(interaction: closeInteraction)
+    }
+
+    // MARK: - 单窗口关闭（供 WindowCloseGuard 复用）
+
+    /// 同步判断是否可直接关闭（无脏 Untitled）。
+    /// 脏 Untitled 由 `resolveUnsavedChanges` 异步处理后经 `allowNextClose` 复关。
+    func shouldCloseImmediately(session: WindowSession) -> Bool {
+        return session.prepareForClose() == .close
+    }
+
+    /// 异步处理单个脏 Untitled session 的保存确认。
+    /// 供 Cmd+W 流程调用，调用方在 `Task` 内 await 结果。
+    func resolveUnsavedChanges(for session: WindowSession) async -> UnsavedCloseDecision {
+        return await closeCoordinator.resolveUnsavedChanges(for: session)
+    }
+
+    // MARK: - 应用退出
+
+    /// 进入终止处理：同步切到 `.processing`，返回是否接管。
+    /// 重复 Cmd+Q 在 `.processing` / `.terminating` 期间返回 false，调用方不再 `reply`。
+    @discardableResult
+    func beginTermination() -> Bool {
+        guard state == .idle else {
+            logger.info("beginTermination ignored: state=\(String(describing: self.state))")
             return false
         }
+        state = .processing
+        return true
     }
 
-    @discardableResult
-    func processTermination() -> Bool {
-        guard !isTerminating else { return false }
-        isTerminating = true
-        defer { isTerminating = false }
+    /// 异步串行处理所有脏 Untitled session，最终 `reply(toApplicationShouldTerminate:)`。
+    /// 由 `applicationShouldTerminate` 经 `beginTermination` 切到 `.processing` 后调用。
+    func processTermination() async {
+        guard state == .processing else {
+            logger.info("processTermination ignored: state=\(String(describing: self.state))")
+            return
+        }
 
         guard let coordinator else {
+            // 无 coordinator：直接放行
+            state = .terminating
             NSApp.reply(toApplicationShouldTerminate: true)
-            return true
+            return
         }
 
-        let dirtySessions = coordinator.sessions.values.filter {
-            $0.documentViewModel.isUntitled && $0.documentViewModel.isDirty
-        }
+        // 按确定顺序（WindowID uuid 字符串）处理所有脏 Untitled session，保证可测试、可复现。
+        let dirtySessions = coordinator.sessions.values
+            .filter { $0.documentViewModel.isUntitled && $0.documentViewModel.isDirty }
+            .sorted { $0.id.rawValue.uuidString < $1.id.rawValue.uuidString }
 
         for session in dirtySessions {
-            let canClose = presentUntitledSaveAlert(for: session)
-            if !canClose {
+            let decision = await resolveUnsavedChanges(for: session)
+            if decision == .cancel {
+                // 任一 session 取消或保存失败：终止整个退出流程，复位 idle 允许下次尝试
+                state = .idle
                 NSApp.reply(toApplicationShouldTerminate: false)
-                return false
+                return
             }
         }
 
+        // 全部允许关闭：放行退出，不复位 idle（应用即将退出）
+        state = .terminating
         NSApp.reply(toApplicationShouldTerminate: true)
-        return true
     }
 
     func handleReopen() {
@@ -67,51 +126,10 @@ final class ApplicationTerminationCoordinator {
         }
     }
 
-    private func presentUntitledSaveAlert(for session: WindowSession) -> Bool {
-        let doc = session.documentViewModel
-        let settings = SettingsModel.shared
-        let language = settings.languagePref.resolvedLanguage
+    // MARK: - 测试支持
 
-        let alert = NSAlert()
-        alert.messageText = L10n.tr(.unsavedChangesTitle, language: language)
-        alert.informativeText = L10n.tr(.unsavedChangesMessage, language: language)
-        alert.alertStyle = .warning
-
-        alert.addButton(withTitle: L10n.tr(.unsavedSave, language: language))
-        alert.addButton(withTitle: L10n.tr(.unsavedDontSave, language: language))
-        alert.addButton(withTitle: L10n.tr(.unsavedCancel, language: language))
-
-        alert.buttons[0].keyEquivalent = "\r"
-        alert.buttons[1].keyEquivalent = "d"
-        alert.buttons[1].keyEquivalentModifierMask = .command
-        alert.buttons[2].keyEquivalent = "\u{1b}"
-
-        let response = alert.runModal()
-
-        switch response {
-        case .alertFirstButtonReturn:
-            let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
-            let suggestedName = doc.fileName.isEmpty ? "Untitled.md" : doc.fileName
-            guard let saveURL = OpenPanelHelper.showSavePanel(
-                for: session.window,
-                language: language,
-                defaultDirectory: defaultDir,
-                suggestedName: suggestedName
-            ) else {
-                return false
-            }
-            let semaphore = DispatchSemaphore(value: 0)
-            Task { @MainActor in
-                await doc.saveAs(to: saveURL)
-                semaphore.signal()
-            }
-            semaphore.wait()
-            return true
-        case .alertSecondButtonReturn:
-            doc.discardUntitledFile()
-            return true
-        default:
-            return false
-        }
+    /// 仅供测试：复位终止状态。生产代码不应调用。
+    func resetStateForTesting() {
+        state = .idle
     }
 }
