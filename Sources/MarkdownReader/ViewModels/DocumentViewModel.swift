@@ -373,6 +373,11 @@ final class DocumentViewModel {
 
         isLoading = false
 
+        // 递增版本号：明确表示这是一次程序化内容替换。
+        // `SyntaxHighlightedEditor` 据此用 ViewModel 的空内容覆盖编辑器残留的旧内容，
+        // 阻止 first responder 把上一个文件的内容反写回 ViewModel（回归根因 3）。
+        contentVersion += 1
+
         return fileURL
     }
 
@@ -506,6 +511,8 @@ final class DocumentViewModel {
         contentCache.removeAll()
         displayModeCache.removeAll()
         diskContentSnapshot.removeAll()
+        // 程序化清空：递增版本号，强制编辑器采用空内容，阻止残留内容反写。
+        contentVersion += 1
     }
 
     /// 取消选中当前文件（保留其他文件的缓存）
@@ -528,6 +535,8 @@ final class DocumentViewModel {
         isFileModifiedExternally = false
         displayMode = settings.defaultDisplayMode
         outlineItems = []
+        // 程序化清空：递增版本号，强制编辑器采用空内容，阻止残留内容反写。
+        contentVersion += 1
     }
 
     func discardUntitledFile() {
@@ -552,6 +561,8 @@ final class DocumentViewModel {
         isFileModifiedExternally = false
         displayMode = settings.defaultDisplayMode
         outlineItems = []
+        // 程序化清空：递增版本号，强制编辑器采用空内容，阻止残留内容反写。
+        contentVersion += 1
     }
 
     // MARK: - 文件监控与外部变更检测

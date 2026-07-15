@@ -543,15 +543,18 @@ private struct SelectionChangeModifier: ViewModifier {
         content
             .onChange(of: fileTreeViewModel.selectedFileURL) { oldURL, newURL in
                 if let url = newURL {
-                    if documentViewModel.isUntitled && documentViewModel.isDirty {
-                        handleFileSwitchWithUnsavedChanges(from: oldURL, to: url)
-                    } else {
-                        Task {
-                            await documentViewModel.loadFile(at: url)
-                        }
-                        let node = findFileNode(in: fileTreeViewModel.nodes, url: url)
-                        appViewModel.selectedFile = node
+                    // 文件切换事务（含脏 Untitled 保存确认、所有权声明/释放、选中项切换）
+                    // 已由 `WindowSession.requestFileSelection` 完成。本视图层只负责响应
+                    // 已确认的选中项变化，加载目标文档——不再承担切换决策或保存弹窗，
+                    // 避免与 session 的事务形成双重加载/竞态（回归根因 + 任务 3）。
+                    //
+                    // 脏 Untitled 路径下 session 在保存决策通过后才更新 selectedFileURL，
+                    // 因此到达这里时 Untitled 已被清理或保存为真实文件，直接加载即可。
+                    Task {
+                        await documentViewModel.loadFile(at: url)
                     }
+                    let node = findFileNode(in: fileTreeViewModel.nodes, url: url)
+                    appViewModel.selectedFile = node
                 } else {
                     if let deletedURL = oldURL,
                        !FileManager.default.fileExists(atPath: deletedURL.path),
@@ -565,77 +568,6 @@ private struct SelectionChangeModifier: ViewModifier {
                     appViewModel.selectedFile = nil
                 }
             }
-    }
-
-    /// 文件切换时的未保存修改弹窗（仅临时新建文件触发）
-    private func handleFileSwitchWithUnsavedChanges(from oldURL: URL?, to newURL: URL) {
-        guard documentViewModel.currentFileURL != newURL else { return }
-
-        let language = settings.languagePref.resolvedLanguage
-
-        let alert = NSAlert()
-        alert.messageText = L10n.tr(.unsavedChangesTitle, language: language)
-        alert.informativeText = L10n.tr(.unsavedChangesMessage, language: language)
-        alert.alertStyle = .warning
-
-        alert.addButton(withTitle: L10n.tr(.unsavedSave, language: language))
-        alert.addButton(withTitle: L10n.tr(.unsavedDontSave, language: language))
-        alert.addButton(withTitle: L10n.tr(.unsavedCancel, language: language))
-
-        alert.buttons[0].keyEquivalent = "\r"
-        alert.buttons[1].keyEquivalent = "d"
-        alert.buttons[1].keyEquivalentModifierMask = .command
-        alert.buttons[2].keyEquivalent = "\u{1b}"
-
-        let response = alert.runModal()
-
-        switch response {
-        case .alertFirstButtonReturn:
-            // 保存：临时新建文件走另存为流程
-            let defaultDir = settings.lastOpenedDirectory ?? settings.lastOpenedFile?.deletingLastPathComponent()
-            let suggestedName = documentViewModel.fileName.isEmpty ? "Untitled.md" : documentViewModel.fileName
-            let hostWindow = session.window
-
-            Task { @MainActor in
-                guard let saveURL = await OpenPanelHelper.showSavePanel(
-                    for: hostWindow,
-                    language: language,
-                    defaultDirectory: defaultDir,
-                    suggestedName: suggestedName
-                ) else {
-                    fileTreeViewModel.selectedFileURL = oldURL
-                    return
-                }
-                let success = await documentViewModel.saveAs(to: saveURL)
-                guard success else {
-                    // 写入失败：回退选中项，保留原内容
-                    fileTreeViewModel.selectedFileURL = oldURL
-                    return
-                }
-                appViewModel.hasUnsavedUntitled = false
-                await documentViewModel.loadFile(at: newURL)
-                let node = findFileNode(in: fileTreeViewModel.nodes, url: newURL)
-                appViewModel.selectedFile = node
-
-                if let rootDir = appViewModel.rootDirectory,
-                   saveURL.path.hasPrefix(rootDir.path + "/") {
-                    await fileTreeViewModel.loadDirectory(rootDir)
-                    fileTreeViewModel.selectedFileURL = saveURL
-                }
-            }
-
-        case .alertSecondButtonReturn:
-            documentViewModel.discardUntitledFile()
-            appViewModel.hasUnsavedUntitled = false
-            Task {
-                await documentViewModel.loadFile(at: newURL)
-            }
-            let node = findFileNode(in: fileTreeViewModel.nodes, url: newURL)
-            appViewModel.selectedFile = node
-
-        default:
-            fileTreeViewModel.selectedFileURL = oldURL
-        }
     }
 
     /// 处理文件被外部删除且有未保存修改的情况

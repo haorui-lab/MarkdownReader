@@ -183,4 +183,103 @@ final class NewFileAndSaveFlowTests: TemporaryDirectoryTestCase {
         let written = try String(contentsOf: url, encoding: .utf8)
         XCTAssertEqual(written, "# changed", "普通文件应直接保存到原路径")
     }
+
+    // MARK: - 脏 Untitled → 目录内选 B（统一文件切换事务，任务 3）
+
+    private func makeDirtyUntitledInDirectory(coordinator: WindowCoordinator, interaction: FakeInteraction) throws -> (WindowSession, URL, URL) {
+        let session = makeSession(coordinator: coordinator, interaction: interaction)
+        let dir = try makeDirectory(named: "docs")
+        let a = try makeFile(named: "A.md", in: dir, content: "# A")
+        let b = try makeFile(named: "B.md", in: dir, content: "# B")
+        session.appViewModel.openDirectory(dir)
+        try coordinator.claim(ResourceIdentityService().identity(for: dir, kind: .directory), for: session.id)
+        session.documentViewModel.currentFileURL = a
+        session.fileTreeViewModel.selectedFileURL = a
+        try coordinator.claim(ResourceIdentityService().identity(for: a, kind: .file), for: session.id)
+        // 制造脏 Untitled（Cmd+N 路径会释放 A 的所有权）
+        session.handleNewFile()
+        session.documentViewModel.content = "# dirty untitled"
+        session.appViewModel.hasUnsavedUntitled = true
+        session.appViewModel.untitledFileName = session.documentViewModel.fileName
+        return (session, a, b)
+    }
+
+    /// 脏 Untitled → 选 B → 不保存：丢弃 Untitled，加载 B 并声明 B 所有权。
+    func testDirtyUntitledSwitchDontSaveLoadsTarget() async throws {
+        let coordinator = WindowCoordinator()
+        let interaction = FakeInteraction()
+        let (session, a, b) = try makeDirtyUntitledInDirectory(coordinator: coordinator, interaction: interaction)
+        coordinator.register(session: session)
+        interaction.promptChoice = .dontSave
+
+        session.requestFileSelection(b)
+        await waitForAsyncSessionWork()
+        await waitForAsyncSessionWork()
+
+        XCTAssertEqual(session.fileTreeViewModel.selectedFileURL, b, "不保存后应切换到 B")
+        XCTAssertEqual(coordinator.owner(of: try ResourceIdentityService().identity(for: b, kind: .file)),
+                       session.id, "B.md 所有权应归当前窗口")
+    }
+
+    /// 脏 Untitled → 选 B → 取消：保留 Untitled，选择不变，不声明 B。
+    func testDirtyUntitledSwitchCancelKeepsUntitled() async throws {
+        let coordinator = WindowCoordinator()
+        let interaction = FakeInteraction()
+        let (session, a, b) = try makeDirtyUntitledInDirectory(coordinator: coordinator, interaction: interaction)
+        coordinator.register(session: session)
+        let selectionBefore = session.fileTreeViewModel.selectedFileURL
+        interaction.promptChoice = .cancel
+
+        session.requestFileSelection(b)
+        await waitForAsyncSessionWork()
+        await waitForAsyncSessionWork()
+
+        XCTAssertTrue(session.documentViewModel.isUntitled, "取消后应仍为 Untitled")
+        XCTAssertEqual(session.documentViewModel.content, "# dirty untitled", "取消后 Untitled 内容不得丢失")
+        XCTAssertEqual(session.fileTreeViewModel.selectedFileURL, selectionBefore, "取消后选中项应保持不变")
+        XCTAssertNil(coordinator.owner(of: try ResourceIdentityService().identity(for: b, kind: .file)),
+                     "取消后不得声明 B 所有权")
+    }
+
+    /// 脏 Untitled → 选 B → 保存失败：保留 Untitled，不加载 B。
+    func testDirtyUntitledSwitchSaveFailureKeepsUntitled() async throws {
+        let coordinator = WindowCoordinator()
+        let interaction = FakeInteraction()
+        let (session, a, b) = try makeDirtyUntitledInDirectory(coordinator: coordinator, interaction: interaction)
+        coordinator.register(session: session)
+        let selectionBefore = session.fileTreeViewModel.selectedFileURL
+        interaction.promptChoice = .save
+        // 指向不存在的目录，写入必然失败
+        interaction.saveTarget = URL(fileURLWithPath: "/nonexistent-root-\(UUID().uuidString)/x.md")
+
+        session.requestFileSelection(b)
+        await waitForAsyncSessionWork()
+        await waitForAsyncSessionWork()
+        await waitForAsyncSessionWork()
+
+        XCTAssertTrue(session.documentViewModel.isUntitled, "保存失败后应仍为 Untitled")
+        XCTAssertEqual(session.documentViewModel.content, "# dirty untitled", "保存失败后内容不得丢失")
+        XCTAssertEqual(session.fileTreeViewModel.selectedFileURL, selectionBefore, "保存失败后选中项应保持不变")
+        XCTAssertNil(coordinator.owner(of: try ResourceIdentityService().identity(for: b, kind: .file)),
+                     "保存失败后不得声明 B 所有权")
+    }
+
+    /// B 由另一窗口持有 → 当前窗口不切换、不丢弃 Untitled，只激活 owner。
+    func testDirtyUntitledSwitchOwnedByOtherActivatesOwner() async throws {
+        let coordinator = WindowCoordinator()
+        let interaction = FakeInteraction()
+        let (session, a, b) = try makeDirtyUntitledInDirectory(coordinator: coordinator, interaction: interaction)
+        coordinator.register(session: session)
+
+        let other = makeSession(coordinator: coordinator, interaction: interaction)
+        coordinator.register(session: other)
+        try coordinator.claim(ResourceIdentityService().identity(for: b, kind: .file), for: other.id)
+        let selectionBefore = session.fileTreeViewModel.selectedFileURL
+
+        session.requestFileSelection(b)
+
+        XCTAssertEqual(session.fileTreeViewModel.selectedFileURL, selectionBefore, "B 已被其他窗口持有时当前选中项不得变")
+        XCTAssertTrue(session.documentViewModel.isUntitled, "B 已被持有时当前 Untitled 不得被丢弃")
+        XCTAssertEqual(coordinator.lastActiveWindowID, other.id, "应激活持有 B 的 owner 窗口")
+    }
 }

@@ -170,6 +170,45 @@ class HighlightableTextView: NSTextView {
 
 // MARK: - 语法高亮编辑器
 
+/// 编辑器内容同步策略（任务 4）。
+///
+/// 决定 `updateNSView` 发现 ViewModel 内容与 `NSTextView` 内容不一致时，应采用
+/// ViewModel 内容（覆盖编辑器）还是编辑器内容（回写 ViewModel）。提取为独立纯逻辑，
+/// 使该决策可在无 `NSTextView` 的 headless 环境单独测试。
+///
+/// 规则：内容相同 → 用 ViewModel（无操作意义，保持一致）；
+/// 内容不同且非强制更新且编辑器是 first responder → 用编辑器（用户正在编辑，以编辑器为准）；
+/// 否则 → 用 ViewModel（强制覆盖，阻止 first responder 把旧内容反写）。
+/// 强制更新条件：文件身份变化（fileDidChange）或 contentVersion 变化（程序化内容替换）。
+enum EditorSyncPolicy {
+    /// 本次更新应采用的结果。
+    enum Outcome: Equatable {
+        /// 用 ViewModel 内容覆盖编辑器（程序化更新或非编辑态）。
+        case useViewModel
+        /// 用编辑器当前内容回写 ViewModel（用户正在编辑）。
+        case useEditor
+    }
+
+    /// - Parameters:
+    ///   - contentDiffers: 编辑器当前内容与 ViewModel 内容是否不同。
+    ///   - fileDidChange: 文件身份（fileURL）是否变化。
+    ///   - contentVersionChanged: ViewModel 的 contentVersion 是否变化（程序化更新）。
+    ///   - editorIsFirstResponder: 编辑器是否为窗口第一响应者。
+    static func outcome(
+        contentDiffers: Bool,
+        fileDidChange: Bool,
+        contentVersionChanged: Bool,
+        editorIsFirstResponder: Bool
+    ) -> Outcome {
+        guard contentDiffers else { return .useViewModel }
+        let isForcedUpdate = fileDidChange || contentVersionChanged
+        if !isForcedUpdate && editorIsFirstResponder {
+            return .useEditor
+        }
+        return .useViewModel
+    }
+}
+
 /// 基于 NSTextView 的语法高亮编辑器
 /// 支持 Markdown 语法着色、主题色适配、滚动到指定行
 struct SyntaxHighlightedEditor: NSViewRepresentable {
@@ -294,8 +333,11 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? HighlightableTextView else { return }
 
-        // 检测文件切换：更新 undoStore 的活跃文件
-        if context.coordinator.currentFileURL != fileURL {
+        // 检测文件切换：在更新 coordinator.currentFileURL 之前先捕获，供内容同步判定使用。
+        // 文件身份变化必须视为强制覆盖（即使编辑器是 first responder，也不能把上一个文件的
+        // 内容反写回 ViewModel），回归根因 3。
+        let fileDidChange = context.coordinator.currentFileURL != fileURL
+        if fileDidChange {
             undoStore?.switchFile(to: fileURL)
             context.coordinator.currentFileURL = fileURL
         }
@@ -309,11 +351,19 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
             // 导致 updateNSView 被调用，如果此时 content 与 textView.string 不同，
             // 不应用 content 覆盖 textView，而应反过来同步
             //
-            // 例外：当 contentVersion 变化时（reload/load 操作），说明 ViewModel
-            // 程序化更新了内容，此时必须用 ViewModel 的内容覆盖编辑器，
-            // 不允许 firstResponder 回写保护逻辑覆盖程序化更新
-            let isForcedUpdate = contentVersion != context.coordinator.lastContentVersion
-            if !isForcedUpdate, let window = textView.window, window.firstResponder === textView {
+            // 例外（强制覆盖，ViewModel 内容必须胜出，不允许 firstResponder 反写）：
+            // 1. contentVersion 变化：reload/load/createUntitled 等程序化内容替换；
+            // 2. 文件身份变化（fileDidChange）：切换文档时即使编辑器是 first responder，
+            //    也必须用新文档的 ViewModel 内容覆盖编辑器残留的旧内容（回归根因 3）。
+            let contentVersionChanged = contentVersion != context.coordinator.lastContentVersion
+            let editorIsFirstResponder = textView.window?.firstResponder === textView
+            let outcome = EditorSyncPolicy.outcome(
+                contentDiffers: true,
+                fileDidChange: fileDidChange,
+                contentVersionChanged: contentVersionChanged,
+                editorIsFirstResponder: editorIsFirstResponder
+            )
+            if outcome == .useEditor {
                 content = currentContent
             } else {
                 textView.undoManager?.disableUndoRegistration()

@@ -167,13 +167,19 @@ final class WindowSession {
     /// 否则已承载根目录的非空白窗口会被路由引擎判为 `.createWindow`，错误地新建窗口。
     /// 改为按产品需求 §6.5 在当前目录窗口内执行文件切换事务：
     ///
-    /// 1. 目标文件已由本窗口持有：幂等，不重复加载。
+    /// 1. 目标文件就是当前文档（同时持有所有权 + currentFileURL + selectedFileURL 三者一致）：
+    ///    幂等，不重复加载。
     /// 2. 目标文件由其他窗口持有：保持当前选中项与文档不变，激活 owner 窗口。
-    /// 3. 目标文件无其他 owner：在当前窗口打开。
-    ///    - 为当前 session 声明目标文件所有权；
+    /// 3. 目标文件无其他 owner：
+    ///    - 为当前 session 声明目标文件所有权（即使本窗口历史残留持有目标，也重新声明以自愈）；
     ///    - 释放此前在该目录窗口显示的文件所有权（保留根目录所有权）；
     ///    - 更新文件树选择并加载文档。
-    /// 所有权声明、旧文件释放、选中项切换作为同一主线程事务完成。
+    ///
+    /// 幂等判断必须同时验证「持有 + 当前文档 + 当前选中项」三者一致——仅「本窗口持有」不能提前返回，
+    /// 否则 Cmd+N 后旧文件所有权残留会导致再次选择该文件时被误判为幂等而无反应（回归根因 2）。
+    ///
+    /// 脏 Untitled 时的保存确认由本方法同步驱动（复用 `resolveUnsavedChanges`），
+    /// 决策完成前不修改 `selectedFileURL`，避免与视图层弹窗竞态。
     func requestFileSelection(_ url: URL) {
         guard let coordinator else {
             // 无 coordinator 时回退为直接选择（兼容旧测试/单窗口）
@@ -189,8 +195,11 @@ final class WindowSession {
             return
         }
 
-        // 1. 本窗口已持有该文件：幂等。
-        if coordinator.isFileOwnedBySelf(url, owner: id) {
+        // 1. 目标就是当前文档：幂等（三者一致才算，仅持有不算）。
+        let stdURL = url.standardizedFileURL
+        if coordinator.isFileOwnedBySelf(url, owner: id),
+           documentViewModel.currentFileURL?.standardizedFileURL == stdURL,
+           fileTreeViewModel.selectedFileURL?.standardizedFileURL == stdURL {
             return
         }
 
@@ -210,20 +219,41 @@ final class WindowSession {
     ///
     /// 职责划分（与原 `.openInSession` 设计一致）：session 负责所有权事务与选中项切换，
     /// **文档加载由视图层 `SelectionChangeModifier` 响应 `selectedFileURL` 变化完成**。
-    /// 因此本方法不直接 `loadFile`——否则会与视图层 `onChange` 双重加载，且脏 Untitled 时
-    /// 视图的 `runModal` 保存弹窗会阻塞主 actor，cancel 后 session 的延迟加载仍会覆盖取消结果。
+    /// 因此本方法不直接 `loadFile`——否则会与视图层 `onChange` 双重加载。
     ///
-    /// 脏 Untitled 时只切换选中项，交由视图层弹「保存/不保存/取消」并加载；本方法不声明
-    /// 所有权，避免用户取消后留下错误 owner。
+    /// 脏 Untitled 时先在本方法内完成保存/不保存/取消决策（复用终止协调器），
+    /// 决策完成前不触碰 `selectedFileURL`；用户取消或保存失败则保持当前状态。
+    /// 决策通过后才声明目标所有权、释放旧真实文件所有权、更新选中项。
     private func openFileInDirectoryWindow(url: URL, resource: ResourceIdentity) {
-        guard let coordinator else {
+        guard coordinator != nil else {
             fileTreeViewModel.selectedFileURL = url
             return
         }
 
-        // 脏 Untitled：交由视图层 SelectionChangeModifier 处理保存确认 + 加载。
-        // 此处仅切换选中项，不声明所有权/不加载，避免与保存弹窗竞态。
+        // 脏 Untitled：先完成未保存决策，再进入文件切换事务。
+        // 决策完成前不改 selectedFileURL，避免与视图层弹窗/加载竞态。
         if documentViewModel.isUntitled && documentViewModel.isDirty {
+            let oldURL = fileTreeViewModel.selectedFileURL
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let termCoord = self.terminationCoordinatorForTesting ?? AppDelegate.sharedTerminationCoordinator
+                let decision = await termCoord.resolveUnsavedChanges(for: self)
+                guard decision == .proceed else {
+                    // 取消或保存失败：保持当前 Untitled 状态不变
+                    return
+                }
+                self.commitFileSwitchTransaction(url: url, resource: resource, oldSelectionURL: oldURL)
+            }
+            return
+        }
+
+        commitFileSwitchTransaction(url: url, resource: resource, oldSelectionURL: fileTreeViewModel.selectedFileURL)
+    }
+
+    /// 执行文件切换事务的统一收尾：声明目标所有权 → 释放旧真实文件所有权 → 更新选中项。
+    /// 文档加载仍由视图层 `SelectionChangeModifier` 响应 `selectedFileURL` 变化完成。
+    private func commitFileSwitchTransaction(url: URL, resource: ResourceIdentity, oldSelectionURL: URL?) {
+        guard let coordinator else {
             fileTreeViewModel.selectedFileURL = url
             return
         }
@@ -240,10 +270,34 @@ final class WindowSession {
         }
 
         // 释放此前在本目录窗口显示的文件所有权（保留根目录所有权）。
+        // 同时考虑两种来源的「旧真实文件」：
+        // 1. 文档模型当前指向的真实文件（currentFileURL，非 Untitled）；
+        // 2. 此前目录窗口选中过的真实文件（oldSelectionURL，非 Untitled 临时文件、非目标本身）——
+        //    Cmd+N 后 currentFileURL 已是 Untitled 临时文件，旧真实文件所有权需经此释放。
+        // 判定「非 Untitled 临时文件」用 `isUntitled` + 路径前缀双保险：前者覆盖文档模型状态，
+        // 后者覆盖 oldSelectionURL（它来自文件树，不经过 isUntitled 判定）。
+        let stdURL = url.standardizedFileURL
+        let untitledDir = DocumentViewModel.untitledDirectory.standardizedFileURL.path
+        func isRealFile(_ candidate: URL) -> Bool {
+            let std = candidate.standardizedFileURL
+            if std.path == stdURL.path { return false }
+            // 排除 Untitled 临时目录下的临时文件
+            return !std.path.hasPrefix(untitledDir + "/")
+        }
+        var released = Set<String>()
         if let oldFileURL = documentViewModel.currentFileURL,
            !documentViewModel.isUntitled,
-           oldFileURL.standardizedFileURL != url.standardizedFileURL {
-            coordinator.releaseFileOwnership(oldFileURL, for: id)
+           isRealFile(oldFileURL) {
+            let key = oldFileURL.standardizedFileURL.path
+            if released.insert(key).inserted {
+                coordinator.releaseFileOwnership(oldFileURL, for: id)
+            }
+        }
+        if let oldSelection = oldSelectionURL, isRealFile(oldSelection) {
+            let key = oldSelection.standardizedFileURL.path
+            if released.insert(key).inserted {
+                coordinator.releaseFileOwnership(oldSelection, for: id)
+            }
         }
 
         // 切换选中项；文档加载由视图层 SelectionChangeModifier 响应变化完成。
@@ -367,8 +421,25 @@ final class WindowSession {
     }
 
     /// 实际创建一个新 Untitled 文档（清理当前状态后）。
+    ///
+    /// 回归修复（根因 1）：Cmd+N 成功创建 Untitled 后，必须释放此前本窗口显示的真实文件所有权，
+    /// 否则窗口同时持有「旧真实文件 + 新 Untitled 临时文件」，再次选择旧文件时被幂等判断误判。
+    /// Untitled 临时文件不进入全局所有权注册表，故只需释放真实文件所有权，根目录所有权保留。
     private func createNewUntitled() {
+        // 创建前记录当前真实文件（非 Untitled）URL，用于创建成功后释放所有权。
+        let previousRealFileURL: URL? = {
+            guard !documentViewModel.isUntitled else { return nil }
+            return documentViewModel.currentFileURL
+        }()
+
         guard documentViewModel.createUntitledFile() != nil else { return }
+
+        // 创建成功后释放此前真实文件所有权（保留根目录所有权）。
+        // 此前若已是 Untitled（无真实文件），previousRealFileURL 为 nil，跳过。
+        if let oldURL = previousRealFileURL, let coordinator {
+            coordinator.releaseFileOwnership(oldURL, for: id)
+        }
+
         fileTreeViewModel.selectedFileURL = nil
         appViewModel.selectedFile = nil
         appViewModel.hasUnsavedUntitled = true

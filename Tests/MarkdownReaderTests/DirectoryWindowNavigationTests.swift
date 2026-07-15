@@ -147,7 +147,118 @@ final class DirectoryWindowNavigationTests: TemporaryDirectoryTestCase {
 
         XCTAssertEqual(coordinator.owner(of: dirIdentity), session.id,
                        "切换文件后根目录所有权必须保留")
-    }}
+    }
+
+    // MARK: - 回归修复：Cmd+N 释放此前真实文件所有权
+
+    /// 复现路径：选 A → Cmd+N（空 Untitled）→ A 仍归本窗口 → 再选 A 无反应。
+    /// 修复后 Cmd+N 成功创建 Untitled 时必须释放 A 的所有权，根目录所有权保留。
+    func testCmdNReleasesPreviouslySelectedFileOwnership() throws {
+        let coordinator = WindowCoordinator()
+        let created = CreatedWindowsBox()
+        coordinator.windowCreationClosureForTesting = { id in created.ids.append(id) }
+
+        let dir = try makeDirectory(named: "docs")
+        let a = try makeFile(named: "A.md", in: dir, content: "# A")
+
+        let session = makeSession(coordinator: coordinator)
+        coordinator.register(session: session)
+        session.appViewModel.openDirectory(dir)
+        let dirIdentity = try identityService.identity(for: dir, kind: .directory)
+        try coordinator.claim(dirIdentity, for: session.id)
+        // 当前显示并持有 A.md
+        session.documentViewModel.currentFileURL = a
+        session.fileTreeViewModel.selectedFileURL = a
+        try coordinator.claim(identityService.identity(for: a, kind: .file), for: session.id)
+
+        // Cmd+N：当前非脏，直接创建 Untitled
+        session.handleNewFile()
+
+        XCTAssertTrue(session.documentViewModel.isUntitled, "Cmd+N 后应为 Untitled 文档")
+        XCTAssertNil(coordinator.owner(of: try identityService.identity(for: a, kind: .file)),
+                     "Cmd+N 后必须释放此前 A.md 的所有权")
+        XCTAssertEqual(coordinator.owner(of: dirIdentity), session.id,
+                       "Cmd+N 后根目录所有权必须保留")
+        XCTAssertNil(session.fileTreeViewModel.selectedFileURL, "Cmd+N 后选中项应清空")
+        XCTAssertTrue(created.ids.isEmpty, "Cmd+N 不得创建新窗口")
+    }
+
+    // MARK: - 回归修复：干净 Untitled 可在 B 与 A 间往返切换
+
+    /// 复现路径：选 A → Cmd+N（不修改）→ 选 B → 再选 A 无反应。
+    /// 修复后应能正确切换到 A，B 所有权释放，A 重新归当前窗口，不创建新窗口。
+    func testCleanUntitledCanSwitchBThenReturnToA() throws {
+        let coordinator = WindowCoordinator()
+        let created = CreatedWindowsBox()
+        coordinator.windowCreationClosureForTesting = { id in created.ids.append(id) }
+
+        let dir = try makeDirectory(named: "docs")
+        let a = try makeFile(named: "A.md", in: dir, content: "# A")
+        let b = try makeFile(named: "B.md", in: dir, content: "# B")
+
+        let session = makeSession(coordinator: coordinator)
+        coordinator.register(session: session)
+        session.appViewModel.openDirectory(dir)
+        try coordinator.claim(identityService.identity(for: dir, kind: .directory), for: session.id)
+        session.documentViewModel.currentFileURL = a
+        session.fileTreeViewModel.selectedFileURL = a
+        try coordinator.claim(identityService.identity(for: a, kind: .file), for: session.id)
+
+        // Cmd+N：创建干净 Untitled（A 所有权被释放）
+        session.handleNewFile()
+        XCTAssertTrue(session.documentViewModel.isUntitled)
+
+        // 选 B：可正常切换。此时 currentFileURL 仍是 Untitled 临时文件，
+        // commitFileSwitchTransaction 经 oldSelectionURL（nil，Cmd+N 已清空）不释放 A；
+        // A 在此前已被 Cmd+N 释放。
+        session.requestFileSelection(b)
+        XCTAssertEqual(session.fileTreeViewModel.selectedFileURL, b, "应能切换到 B.md")
+        XCTAssertEqual(coordinator.owner(of: try identityService.identity(for: b, kind: .file)), session.id,
+                       "B.md 所有权应归当前窗口")
+
+        // 再选 A：此前已被 Cmd+N 释放，应能再次切换（自愈）。
+        // 此时 selectedFileURL=b，commitFileSwitchTransaction 经 oldSelectionURL 释放 B 所有权。
+        session.requestFileSelection(a)
+        XCTAssertEqual(session.fileTreeViewModel.selectedFileURL, a, "应能再次切换回 A.md")
+        XCTAssertEqual(coordinator.owner(of: try identityService.identity(for: a, kind: .file)), session.id,
+                       "A.md 所有权应重新归当前窗口")
+        XCTAssertNil(coordinator.owner(of: try identityService.identity(for: b, kind: .file)),
+                     "切回 A 后 B.md 所有权应经 oldSelectionURL 释放")
+        XCTAssertTrue(created.ids.isEmpty, "目录内导航不得创建新窗口")
+    }
+
+    // MARK: - 回归修复：本窗口持有但非当前文档不得视为幂等（自愈）
+
+    /// 构造历史残留：A 归当前窗口持有，但当前实际显示 B，selectedFileURL 也是 B。
+    /// 此时选择 A 不应被幂等判断吞掉，必须重新切换到 A。
+    func testSelfOwnedButNotCurrentFileIsNotTreatedAsIdempotent() throws {
+        let coordinator = WindowCoordinator()
+        let dir = try makeDirectory(named: "docs")
+        let a = try makeFile(named: "A.md", in: dir, content: "# A")
+        let b = try makeFile(named: "B.md", in: dir, content: "# B")
+
+        let session = makeSession(coordinator: coordinator)
+        coordinator.register(session: session)
+        session.appViewModel.openDirectory(dir)
+        try coordinator.claim(identityService.identity(for: dir, kind: .directory), for: session.id)
+
+        // 残留状态：A 归本窗口持有，但当前文档/选中项都是 B
+        try coordinator.claim(identityService.identity(for: a, kind: .file), for: session.id)
+        session.documentViewModel.currentFileURL = b
+        session.fileTreeViewModel.selectedFileURL = b
+
+        // 选择 A：虽「本窗口持有」，但非当前文档，应继续切换。
+        // 此时 selectedFileURL=b，commitFileSwitchTransaction 经 oldSelectionURL 释放 B 所有权。
+        session.requestFileSelection(a)
+
+        XCTAssertEqual(session.fileTreeViewModel.selectedFileURL, a,
+                       "持有但非当前文档时必须切换到 A，不得幂等吞掉")
+        XCTAssertEqual(coordinator.owner(of: try identityService.identity(for: a, kind: .file)), session.id,
+                       "A.md 所有权仍归当前窗口")
+        XCTAssertNil(coordinator.owner(of: try identityService.identity(for: b, kind: .file)),
+                     "切到 A 后 B.md 所有权应经 oldSelectionURL 释放")
+    }
+}
 
 /// 记录测试中创建的 windowID，用于断言「未创建新窗口」。
 @MainActor
